@@ -243,17 +243,32 @@ function AccountFormModal({ open, onClose, account }: { open: boolean; onClose: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = {
+    const newOpening = parseFloat(openingBalance) || 0;
+    const payload: {
+      name: string;
+      type: AccountType;
+      institution?: string;
+      opening_balance: number;
+      current_balance?: number;
+      color: string;
+      icon: string;
+      notes?: string;
+    } = {
       name,
       type,
       institution: institution || undefined,
-      opening_balance: parseFloat(openingBalance) || 0,
+      opening_balance: newOpening,
       color,
       icon,
       notes: notes || undefined,
     };
     try {
       if (isEdit && account) {
+        const oldOpening = Number(account.opening_balance) || 0;
+        const diff = newOpening - oldOpening;
+        if (diff !== 0) {
+          payload.current_balance = Math.round((Number(account.current_balance) + diff) * 100) / 100;
+        }
         await updateAccount.mutateAsync({ id: account.id, ...payload });
         showToast('Account updated', 'success');
       } else {
@@ -294,9 +309,9 @@ function AccountFormModal({ open, onClose, account }: { open: boolean; onClose: 
           <label className="label">Opening Balance</label>
           <div className="relative">
             <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
-            <input className="input pl-8" type="number" step="0.01" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} disabled={isEdit} />
+            <input className="input pl-8" type="number" step="0.01" value={openingBalance} onChange={(e) => setOpeningBalance(e.target.value)} />
           </div>
-          {isEdit && <p className="mt-1 text-xs text-slate-400">Opening balance cannot be changed. Use an adjustment transaction to correct balance.</p>}
+          {isEdit && <p className="mt-1 text-xs text-slate-400">Updating opening balance will automatically adjust the current balance.</p>}
         </div>
         <div>
           <label className="label">Color</label>
