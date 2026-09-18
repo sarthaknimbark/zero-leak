@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Bell, Check, Trash2, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -53,76 +53,29 @@ export function NotificationCenter() {
 
   const fetchNotifications = async () => {
     if (!profile) return;
-    if (isApiEnabled()) {
-      try {
-        const data = await api<AppNotification[]>('/api/notifications');
-        setNotifications(data);
-      } catch (e) {
-        console.error(e);
-      }
-      return;
-    }
-    const { data, error } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(20);
-
-    if (!error && data) {
-      setNotifications(data as AppNotification[]);
+    try {
+      const data = await api<AppNotification[]>('/api/notifications');
+      setNotifications(data);
+    } catch (e) {
+      console.error(e);
     }
   };
 
   const markAllAsRead = async () => {
     if (!profile) return;
-    if (isApiEnabled()) {
-      await api('/api/notifications/mark-all-read', { method: 'PATCH' });
-      fetchNotifications();
-      return;
-    }
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('user_id', profile.id)
-      .eq('read', false);
-
-    if (!error) {
-      fetchNotifications();
-    }
+    await api('/api/notifications/mark-all-read', { method: 'PATCH' });
+    fetchNotifications();
   };
 
   const markAsRead = async (id: string) => {
-    if (isApiEnabled()) {
-      await api(`/api/notifications/${id}/read`, { method: 'PATCH' });
-      fetchNotifications();
-      return;
-    }
-    const { error } = await supabase
-      .from('notifications')
-      .update({ read: true })
-      .eq('id', id);
-
-    if (!error) {
-      fetchNotifications();
-    }
+    await api(`/api/notifications/${id}/read`, { method: 'PATCH' });
+    fetchNotifications();
   };
 
   const deleteNotification = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isApiEnabled()) {
-      await api(`/api/notifications/${id}`, { method: 'DELETE' });
-      fetchNotifications();
-      return;
-    }
-    const { error } = await supabase
-      .from('notifications')
-      .delete()
-      .eq('id', id);
-
-    if (!error) {
-      fetchNotifications();
-    }
+    await api(`/api/notifications/${id}`, { method: 'DELETE' });
+    fetchNotifications();
   };
 
   const unreadCount = notifications.filter(n => !n.read).length;

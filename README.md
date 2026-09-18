@@ -17,12 +17,12 @@ Personal finance app monorepo.
 ## Architecture
 
 ```
-Vercel (client) → Express API (server) → Supabase Postgres
-                 ↘ optional direct Supabase if VITE_API_URL unset
+Vercel / Vite (client) ──Bearer JWT──► Express API (server) ──► Supabase Postgres
+        │
+        └── Supabase Auth only (login session tokens)
 ```
 
-- Set `VITE_API_URL` on the client to route data through the secured backend.
-- Without `VITE_API_URL`, the client keeps talking to Supabase directly (current production behavior).
+Frontend **requires** `VITE_API_URL`. Run backend and frontend together.
 
 ## Quick start
 
@@ -53,4 +53,6 @@ VITE_API_URL=http://localhost:3001
 
 ## Docs
 
-- Server API: `server/README.md`
+- [Render backend deploy](./RENDER.md) — step-by-step for Render + Vercel reconnect
+- [Full deployment guide](./DEPLOYMENT.md) — Vercel + Supabase + API
+- Server API reference: `server/README.md`

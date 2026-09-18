@@ -57,14 +57,14 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
             animate="animate"
             exit="exit"
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-t-3xl sm:rounded-2xl bg-white shadow-float`}
+            className={`relative w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-t-3xl border border-slate-200/70 bg-white shadow-float dark:border-slate-700/60 dark:bg-slate-900 sm:rounded-2xl`}
           >
-            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white/90 px-6 py-4 backdrop-blur">
+            <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white/90 px-6 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">{title}</h2>
-                {description && <p className="mt-0.5 text-sm text-slate-500">{description}</p>}
+                <h2 className="font-display text-lg font-bold text-slate-900 dark:text-slate-100">{title}</h2>
+                {description && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
               </div>
-              <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600">
+              <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200">
                 <X className="h-5 w-5" />
               </button>
             </div>

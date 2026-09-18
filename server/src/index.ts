@@ -1,5 +1,6 @@
 import express from 'express';
 import { env } from './config/env.js';
+import { checkDatabaseConnection, printStartupBanner } from './lib/startup.js';
 import { corsMiddleware } from './middleware/cors.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { healthRouter } from './routes/health.js';
@@ -19,6 +20,7 @@ import { dashboardRouter } from './routes/dashboard.js';
 
 const app = express();
 
+app.set('trust proxy', 1);
 app.disable('x-powered-by');
 app.use(corsMiddleware);
 app.use(express.json({ limit: '256kb' }));
@@ -42,7 +44,15 @@ app.use('/api/dashboard', dashboardRouter);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
-app.listen(env.port, () => {
-  console.log(`zero-leak-server listening on :${env.port} (${env.nodeEnv})`);
-  console.log(`Allowed origins: ${env.allowedOrigins.join(', ')}`);
+async function start() {
+  const status = await checkDatabaseConnection();
+
+  app.listen(env.port, '0.0.0.0', () => {
+    printStartupBanner(status, env.port);
+  });
+}
+
+start().catch((err) => {
+  console.error('Failed to start zero-leak-server:', err);
+  process.exit(1);
 });

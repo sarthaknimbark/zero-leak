@@ -5,7 +5,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useToast } from '@/components/ui/Toast';
 import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import { initials } from '@/lib/format';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Link } from 'react-router-dom';
@@ -34,11 +34,7 @@ export function ProfilePage() {
   const handleTogglePin = async () => {
     if (pinEnabled) {
       if (profile) {
-        if (isApiEnabled()) {
-          await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ pin_enabled: false }) });
-        } else {
-          await supabase.from('profiles').update({ pin_enabled: false }).eq('id', profile.id);
-        }
+        await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ pin_enabled: false }) });
         await refreshProfile();
       }
       localStorage.removeItem('security_pin');
@@ -58,11 +54,7 @@ export function ProfilePage() {
       return;
     }
     if (profile) {
-      if (isApiEnabled()) {
-        await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ pin_enabled: true }) });
-      } else {
-        await supabase.from('profiles').update({ pin_enabled: true }).eq('id', profile.id);
-      }
+      await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ pin_enabled: true }) });
       await refreshProfile();
     }
     localStorage.setItem('security_pin', pinInput);
@@ -85,15 +77,7 @@ export function ProfilePage() {
     setSaving(true);
     setStatus(null);
     try {
-      if (isApiEnabled()) {
-        await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ full_name: fullName }) });
-      } else {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ full_name: fullName })
-          .eq('id', profile.id);
-        if (error) throw error;
-      }
+      await api('/api/profile', { method: 'PATCH', body: JSON.stringify({ full_name: fullName }) });
       await refreshProfile();
       showToast('Profile updated', 'success');
       setStatus({ type: 'success', msg: 'Profile updated successfully' });
@@ -140,12 +124,10 @@ export function ProfilePage() {
         .from('avatars')
         .getPublicUrl(filePath);
 
-      const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ avatar_url: publicUrl })
-        .eq('id', profile.id);
-
-      if (updateError) throw updateError;
+      await api('/api/profile/avatar', {
+        method: 'POST',
+        body: JSON.stringify({ avatar_url: publicUrl }),
+      });
 
       await refreshProfile();
       showToast('Avatar updated', 'success');

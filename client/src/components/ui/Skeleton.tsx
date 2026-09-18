@@ -97,12 +97,12 @@ export function SkeletonChart({ height = 240 }: { height?: number }) {
 
 export function PageSpinner() {
   return (
-    <div className="flex h-64 items-center justify-center">
-      <div className="flex items-center gap-1.5">
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo-600 [animation-delay:-0.3s]" />
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo-500 [animation-delay:-0.15s]" />
-        <div className="h-2.5 w-2.5 animate-bounce rounded-full bg-indigo-400" />
+    <div className="flex h-64 flex-col items-center justify-center gap-3">
+      <div className="relative h-10 w-10">
+        <div className="absolute inset-0 rounded-full border-2 border-indigo-200 dark:border-indigo-900" />
+        <div className="absolute inset-0 animate-spin rounded-full border-2 border-transparent border-t-indigo-600 dark:border-t-indigo-400" />
       </div>
+      <p className="text-xs font-medium text-slate-400">Loading…</p>
     </div>
   );
 }

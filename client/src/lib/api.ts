@@ -2,9 +2,10 @@ import { supabase } from '@/lib/supabase';
 
 const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
 
-/** When set, data calls go through the secured Express backend instead of direct Supabase. */
-export function isApiEnabled() {
-  return Boolean(API_BASE);
+if (!API_BASE) {
+  throw new Error(
+    'Missing VITE_API_URL. Frontend requires the backend API. Example: VITE_API_URL=http://localhost:3001'
+  );
 }
 
 async function authHeaders(): Promise<HeadersInit> {
@@ -17,10 +18,6 @@ async function authHeaders(): Promise<HeadersInit> {
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  if (!API_BASE) {
-    throw new Error('VITE_API_URL is not configured');
-  }
-
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -52,3 +49,5 @@ export function toQuery(params: Record<string, string | number | boolean | undef
   const s = q.toString();
   return s ? `?${s}` : '';
 }
+
+export const API_URL = API_BASE;

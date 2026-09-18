@@ -71,7 +71,7 @@ export function DashboardPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Dashboard</h1>
+          <h1 className="page-title">Dashboard</h1>
           <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', month: 'long', day: 'numeric' })}
           </p>

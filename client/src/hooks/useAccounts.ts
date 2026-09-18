@@ -1,23 +1,12 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
 import type { Account } from '@/lib/types';
 
 export function useAccounts() {
   return useQuery({
     queryKey: queryKeys.accounts,
-    queryFn: async () => {
-      if (isApiEnabled()) {
-        return api<Account[]>('/api/accounts');
-      }
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Account[];
-    },
+    queryFn: () => api<Account[]>('/api/accounts'),
     retry: 1,
   });
 }
@@ -42,21 +31,11 @@ interface AccountInput {
 export function useCreateAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: AccountInput) => {
-      if (isApiEnabled()) {
-        return api<Account>('/api/accounts', {
-          method: 'POST',
-          body: JSON.stringify({ ...input, current_balance: input.opening_balance }),
-        });
-      }
-      const { data, error } = await supabase
-        .from('accounts')
-        .insert({ ...input, current_balance: input.opening_balance })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Account;
-    },
+    mutationFn: (input: AccountInput) =>
+      api<Account>('/api/accounts', {
+        method: 'POST',
+        body: JSON.stringify({ ...input, current_balance: input.opening_balance }),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -67,22 +46,11 @@ export function useCreateAccount() {
 export function useUpdateAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...input }: Partial<AccountInput> & { id: string }) => {
-      if (isApiEnabled()) {
-        return api<Account>(`/api/accounts/${id}`, {
-          method: 'PATCH',
-          body: JSON.stringify(input),
-        });
-      }
-      const { data, error } = await supabase
-        .from('accounts')
-        .update(input)
-        .eq('id', id)
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Account;
-    },
+    mutationFn: ({ id, ...input }: Partial<AccountInput> & { id: string }) =>
+      api<Account>(`/api/accounts/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
@@ -93,14 +61,7 @@ export function useUpdateAccount() {
 export function useDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      if (isApiEnabled()) {
-        await api(`/api/accounts/${id}`, { method: 'DELETE' });
-        return;
-      }
-      const { error } = await supabase.from('accounts').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api(`/api/accounts/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });

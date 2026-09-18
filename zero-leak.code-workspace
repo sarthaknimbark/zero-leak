@@ -1,0 +1,16 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "zero-leak"
+    }
+  ],
+  "settings": {
+    "git.autoRepositoryDetection": false,
+    "git.detectSubmodules": false,
+    "git.detectSubmodulesLimit": 0,
+    "git.repositoryScanMaxDepth": 0,
+    "git.openRepositoryInParentFolders": "never",
+    "git.scanRepositories": []
+  }
+}

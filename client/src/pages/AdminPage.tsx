@@ -8,8 +8,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar,
 } from 'recharts';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled, toQuery } from '@/lib/api';
+import { api, toQuery } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
 import { useToast } from '@/components/ui/Toast';
 import { formatCurrency, formatCompact, formatDate, initials } from '@/lib/format';
@@ -17,6 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { QueryError as ErrorBox } from '@/components/ui';
 import { cn } from '@/lib/cn';
 import type { Profile } from '@/lib/types';
+import type { Transaction } from '@/lib/types';
 
 export function AdminPage() {
   const [search, setSearch] = useState('');
@@ -25,50 +25,26 @@ export function AdminPage() {
 
   const { data: stats, isError: statsError } = useQuery({
     queryKey: queryKeys.adminStats,
-    queryFn: async () => {
-      if (isApiEnabled()) {
-        return api<{
-          total_users: number; total_accounts: number; total_transactions: number;
-          total_transfers: number; total_income: number; total_expense: number; active_users_30d: number;
-        }>('/api/admin/stats');
-      }
-      const { data, error } = await supabase.rpc('admin_stats');
-      if (error) throw error;
-      return data as {
+    queryFn: () =>
+      api<{
         total_users: number; total_accounts: number; total_transactions: number;
         total_transfers: number; total_income: number; total_expense: number; active_users_30d: number;
-      };
-    },
+      }>('/api/admin/stats'),
     retry: 1,
   });
 
   const { data: users } = useQuery({
     queryKey: queryKeys.adminUsers(search),
-    queryFn: async () => {
-      if (isApiEnabled()) {
-        return api<Profile[]>(`/api/admin/users${toQuery({ search })}`);
-      }
-      let q = supabase.from('profiles').select('*').order('created_at', { ascending: false });
-      if (search) {
-        q = q.or(`email.ilike.%${search}%,full_name.ilike.%${search}%`);
-      }
-      const { data, error } = await q.limit(100);
-      if (error) throw error;
-      return (data ?? []) as Profile[];
-    },
+    queryFn: () => api<Profile[]>(`/api/admin/users${toQuery({ search })}`),
     retry: 1,
   });
 
   const { data: userGrowth } = useQuery({
     queryKey: ['admin', 'user-growth'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('created_at')
-        .order('created_at', { ascending: true });
-      if (error) throw error;
+      const data = await api<Profile[]>('/api/admin/users');
       const months = new Map<string, number>();
-      (data ?? []).forEach((u) => {
+      data.forEach((u) => {
         const m = u.created_at.slice(0, 7);
         months.set(m, (months.get(m) ?? 0) + 1);
       });
@@ -84,15 +60,11 @@ export function AdminPage() {
   const { data: txActivity } = useQuery({
     queryKey: ['admin', 'tx-activity'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('date, type, amount')
-        .gte('date', new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0])
-        .order('date', { ascending: true });
-      if (error) throw error;
+      const from = new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0];
+      const data = await api<Transaction[]>(`/api/transactions${toQuery({ date_from: from, sort: 'date_asc' })}`);
       const days = new Map<string, { income: number; expense: number }>();
-      (data ?? []).forEach((t) => {
-        const d = t.date as string;
+      data.forEach((t) => {
+        const d = t.date;
         if (!days.has(d)) days.set(d, { income: 0, expense: 0 });
         const entry = days.get(d)!;
         if (t.type === 'income') entry.income += Number(t.amount);
@@ -109,15 +81,10 @@ export function AdminPage() {
 
   const toggleDisable = useMutation({
     mutationFn: async ({ id, disabled }: { id: string; disabled: boolean }) => {
-      if (isApiEnabled()) {
-        await api(`/api/admin/users/${id}/disabled`, {
-          method: 'PATCH',
-          body: JSON.stringify({ disabled: !disabled }),
-        });
-        return;
-      }
-      const { error } = await supabase.from('profiles').update({ disabled: !disabled }).eq('id', id);
-      if (error) throw error;
+      await api(`/api/admin/users/${id}/disabled`, {
+        method: 'PATCH',
+        body: JSON.stringify({ disabled: !disabled }),
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin'] });
@@ -128,12 +95,7 @@ export function AdminPage() {
 
   const deleteUser = useMutation({
     mutationFn: async (id: string) => {
-      if (isApiEnabled()) {
-        await api(`/api/admin/users/${id}`, { method: 'DELETE' });
-        return;
-      }
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) throw error;
+      await api(`/api/admin/users/${id}`, { method: 'DELETE' });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin'] });

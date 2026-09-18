@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Wallet, ArrowLeftRight, TrendingUp, Search,
   Tags, Download, Settings, LogOut, Plus, Menu, X,
-  PiggyBank, ArrowDownCircle, ArrowUpCircle, ArrowRightLeft,
-  Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users,
+  PiggyBank, ArrowDownCircle, ArrowRightLeft,
+  Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users, Grid2X2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -45,6 +45,12 @@ const fabActions = [
   { label: 'Add Account', icon: PiggyBank, path: '/accounts?action=new' },
 ];
 
+const pageTransition = {
+  initial: { opacity: 0, y: 10, filter: 'blur(2px)' },
+  animate: { opacity: 1, y: 0, filter: 'blur(0px)' },
+  exit: { opacity: 0, y: -4, filter: 'blur(2px)' },
+};
+
 export function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
@@ -52,16 +58,28 @@ export function AppLayout() {
   const [fabOpen, setFabOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setFabOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [drawerOpen]);
+
   if (!profile) {
     return <PageSpinner />;
   }
 
-  const allNav = [...mainNav, ...moreNav];
-
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-250">
+    <div className="app-shell-bg min-h-dvh transition-colors duration-300">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 lg:flex lg:flex-col">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r bg-sidebar backdrop-blur-xl lg:flex lg:flex-col">
         <SidebarContent profile={profile} onSignOut={signOut} />
       </aside>
 
@@ -73,19 +91,20 @@ export function AppLayout() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm lg:hidden"
+              className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm lg:hidden"
               onClick={() => setDrawerOpen(false)}
             />
             <motion.aside
-              initial={{ x: -300 }}
+              initial={{ x: -320 }}
               animate={{ x: 0 }}
-              exit={{ x: -300 }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col bg-white dark:bg-slate-900 lg:hidden"
+              exit={{ x: -320 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              className="fixed inset-y-0 left-0 z-50 flex w-[min(20rem,88vw)] flex-col border-r border-slate-200/80 bg-white shadow-float dark:border-slate-800 dark:bg-slate-950 lg:hidden"
             >
               <button
-                className="absolute right-3 top-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                className="absolute right-3 top-4 rounded-xl p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
                 onClick={() => setDrawerOpen(false)}
+                aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -95,34 +114,36 @@ export function AppLayout() {
         )}
       </AnimatePresence>
 
-      {/* Main content */}
       <div className="lg:pl-64">
-        {/* Mobile top bar */}
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 px-4 py-3 backdrop-blur lg:hidden">
-          <button onClick={() => setDrawerOpen(true)} className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200/70 bg-white/75 px-4 py-3 backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-950/70 lg:hidden">
+          <button
+            onClick={() => setDrawerOpen(true)}
+            className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            aria-label="Open menu"
+          >
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <img src="/favicon.svg" className="h-8 w-8 rounded-lg object-cover shadow-sm" alt="Zero Leak Logo" />
-            <span className="font-bold text-slate-900 dark:text-slate-100">Zero Leak</span>
+            <img src="/favicon.svg" className="h-8 w-8 rounded-lg object-cover shadow-sm" alt="Zero Leak" />
+            <span className="font-display font-bold tracking-tight text-slate-900 dark:text-slate-100">Zero Leak</span>
           </div>
           <div className="flex items-center gap-1.5">
             <NotificationCenter />
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} className="h-8 w-8 rounded-full object-cover border border-slate-200/40 shadow-sm" alt="Profile" />
+              <img src={profile.avatar_url} className="h-8 w-8 rounded-full border border-slate-200/40 object-cover shadow-sm" alt="" />
             ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
                 {initials(profile?.full_name)}
               </div>
             )}
           </div>
         </header>
 
-        <main className="mx-auto max-w-5xl px-4 pb-36 pt-4 sm:px-6 lg:px-8 lg:pb-10 lg:pt-8">
+        <main className="mx-auto max-w-5xl px-4 pb-36 pt-4 sm:px-6 lg:px-8 lg:pb-12 lg:pt-8">
           {location.key !== 'default' && (
             <button
               onClick={() => navigate(-1)}
-              className="mb-4 hidden items-center gap-1 text-sm text-slate-500 hover:text-slate-700 lg:flex"
+              className="mb-4 hidden items-center gap-1 rounded-lg px-1 py-0.5 text-sm text-slate-500 transition hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200 lg:inline-flex"
             >
               <ChevronLeft className="h-4 w-4" /> Back
             </button>
@@ -130,10 +151,11 @@ export function AppLayout() {
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+              variants={pageTransition}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             >
               <Outlet />
             </motion.div>
@@ -145,63 +167,69 @@ export function AppLayout() {
       <div className="fixed bottom-24 right-4 z-30 lg:bottom-8 lg:right-8">
         <AnimatePresence>
           {fabOpen && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="absolute bottom-16 right-0 flex flex-col gap-2"
-            >
-              {fabActions.map((action) => (
-                <button
-                  key={action.label}
-                  onClick={() => { navigate(action.path); setFabOpen(false); }}
-                  className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-float transition hover:bg-slate-50"
-                >
-                  {action.label}
-                  <action.icon className="h-4 w-4 text-indigo-600" />
-                </button>
-              ))}
-            </motion.div>
+            <>
+              <motion.button
+                type="button"
+                aria-label="Close quick actions"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[-1] cursor-default bg-slate-950/10 backdrop-blur-[1px] lg:bg-transparent lg:backdrop-blur-0"
+                onClick={() => setFabOpen(false)}
+              />
+              <motion.div
+                initial={{ opacity: 0, y: 12, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 12, scale: 0.96 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="absolute bottom-16 right-0 flex w-52 flex-col gap-2"
+              >
+                {fabActions.map((action, i) => (
+                  <motion.button
+                    key={action.label}
+                    initial={{ opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.04 }}
+                    onClick={() => { navigate(action.path); setFabOpen(false); }}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-float transition hover:border-indigo-200 hover:bg-indigo-50/60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:border-indigo-800 dark:hover:bg-indigo-950/40"
+                  >
+                    {action.label}
+                    <action.icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                  </motion.button>
+                ))}
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
-        <button
+        <motion.button
+          whileTap={{ scale: 0.92 }}
           onClick={() => setFabOpen(!fabOpen)}
-          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-float shadow-indigo-600/30 transition-all active:scale-95"
+          aria-expanded={fabOpen}
+          aria-label="Quick actions"
+          className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-glow transition-colors hover:bg-indigo-500"
         >
-          <motion.div animate={{ rotate: fabOpen ? 45 : 0 }} transition={{ duration: 0.2 }}>
+          <motion.div animate={{ rotate: fabOpen ? 45 : 0 }} transition={{ type: 'spring', stiffness: 400, damping: 22 }}>
             <Plus className="h-6 w-6" />
           </motion.div>
-        </button>
+        </motion.button>
       </div>
 
-      {/* Bottom nav (mobile) */}
-      <nav className="fixed bottom-4 left-4 right-4 z-30 rounded-2xl border border-slate-200/80 dark:border-slate-800/85 bg-white/95 dark:bg-slate-900/95 shadow-xl shadow-slate-200/50 dark:shadow-none backdrop-blur-md lg:hidden">
-        <div className="flex items-center justify-around px-2 py-2">
+      {/* Bottom nav */}
+      <nav className="fixed bottom-4 left-4 right-4 z-30 rounded-2xl border border-slate-200/80 bg-white/90 shadow-xl shadow-slate-200/40 backdrop-blur-xl dark:border-slate-800/90 dark:bg-slate-950/90 dark:shadow-none lg:hidden">
+        <div className="flex items-center justify-around px-1.5 py-1.5">
           {mainNav.slice(0, 4).map((item) => (
             <BottomNavLink key={item.to} item={item} />
           ))}
-          <NavLink
-            to="/analytics"
-            className={({ isActive }) =>
-              cn(
-                'flex-1 flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-all duration-300',
-                isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
-              )
-            }
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            className="flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium text-slate-400 transition hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
           >
-            {({ isActive }) => (
-              <>
-                <motion.div
-                  whileTap={{ scale: 0.9 }}
-                  animate={isActive ? { scale: 1.15, y: -2 } : { scale: 1, y: 0 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                >
-                  <TrendingUp className="h-5 w-5" />
-                </motion.div>
-                <span>More</span>
-              </>
-            )}
-          </NavLink>
+            <motion.div whileTap={{ scale: 0.9 }}>
+              <Grid2X2 className="h-5 w-5" />
+            </motion.div>
+            <span>More</span>
+          </button>
         </div>
       </nav>
     </div>
@@ -215,21 +243,28 @@ function BottomNavLink({ item }: { item: NavItem }) {
       end={item.to === '/'}
       className={({ isActive }) =>
         cn(
-          'flex-1 flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-all duration-300',
-          isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300'
+          'relative flex flex-1 flex-col items-center gap-0.5 rounded-xl py-1.5 text-[11px] font-medium transition-colors duration-200',
+          isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
         )
       }
     >
       {({ isActive }) => (
         <>
+          {isActive && (
+            <motion.span
+              layoutId="bottom-nav-pill"
+              className="absolute inset-x-2 inset-y-0.5 -z-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/50"
+              transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+            />
+          )}
           <motion.div
             whileTap={{ scale: 0.9 }}
-            animate={isActive ? { scale: 1.15, y: -2 } : { scale: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+            animate={isActive ? { scale: 1.08, y: -1 } : { scale: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 18 }}
           >
             <item.icon className="h-5 w-5" />
           </motion.div>
-          <span>{item.label}</span>
+          <span>{item.label.split(' ')[0]}</span>
         </>
       )}
     </NavLink>
@@ -245,14 +280,16 @@ function SidebarContent({
   onSignOut: () => void;
   onNavigate?: () => void;
 }) {
+  const { theme, toggleTheme } = useTheme();
+
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between px-5 py-5 border-b border-slate-100 dark:border-slate-800/40">
+      <div className="flex items-center justify-between border-b border-slate-100/80 px-5 py-5 dark:border-slate-800/50">
         <div className="flex items-center gap-2.5">
-          <img src="/favicon.svg" className="h-9 w-9 rounded-xl object-cover shadow-md" alt="Zero Leak Logo" />
+          <img src="/favicon.svg" className="h-9 w-9 rounded-xl object-cover shadow-md" alt="Zero Leak" />
           <div>
-            <p className="font-bold tracking-tight text-slate-900 dark:text-slate-100">Zero Leak</p>
-            <p className="text-xs text-slate-400">Money Management</p>
+            <p className="font-display font-bold tracking-tight text-slate-900 dark:text-slate-100">Zero Leak</p>
+            <p className="text-xs text-slate-400">Money, under control</p>
           </div>
         </div>
         <div className="hidden lg:block">
@@ -260,29 +297,38 @@ function SidebarContent({
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
-        <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Menu</p>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-3 no-scrollbar">
+        <p className="px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Menu</p>
         {mainNav.map((item) => (
           <SidebarLink key={item.to} item={item} onClick={onNavigate} />
         ))}
-        <p className="px-3 py-2 pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400">More</p>
+        <p className="px-3 py-2 pt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">More</p>
         {moreNav.map((item) => (
           <SidebarLink key={item.to} item={item} onClick={onNavigate} />
         ))}
         {profile?.is_admin && (
           <>
-            <p className="px-3 py-2 pt-4 text-xs font-semibold uppercase tracking-wider text-slate-400">Admin</p>
+            <p className="px-3 py-2 pt-4 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">Admin</p>
             <SidebarLink item={{ to: '/admin', label: 'Admin Panel', icon: Shield }} onClick={onNavigate} />
           </>
         )}
       </nav>
 
-      <div className="border-t border-slate-100 dark:border-slate-800 p-3">
+      <div className="space-y-2 border-t border-slate-100 p-3 dark:border-slate-800">
+        <button
+          type="button"
+          onClick={toggleTheme}
+          className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4 text-amber-400" /> : <Moon className="h-4 w-4 text-indigo-500" />}
+          {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        </button>
+
         <div className="flex items-center gap-3 rounded-xl px-3 py-2">
           {profile?.avatar_url ? (
-            <img src={profile.avatar_url} className="h-9 w-9 rounded-full object-cover border border-slate-200/40 shadow-sm" alt="Avatar" />
+            <img src={profile.avatar_url} className="h-9 w-9 rounded-full border border-slate-200/40 object-cover shadow-sm" alt="" />
           ) : (
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
               {initials(profile?.full_name)}
             </div>
           )}
@@ -290,7 +336,11 @@ function SidebarContent({
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{profile?.full_name || 'User'}</p>
             <p className="truncate text-xs text-slate-400">{profile?.email || ''}</p>
           </div>
-          <button onClick={onSignOut} className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-error-600" title="Sign out">
+          <button
+            onClick={onSignOut}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-error-600 dark:hover:bg-slate-800"
+            title="Sign out"
+          >
             <LogOut className="h-4 w-4" />
           </button>
         </div>
@@ -307,15 +357,26 @@ function SidebarLink({ item, onClick }: { item: NavItem; onClick?: () => void })
       onClick={onClick}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition',
+          'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
           isActive
-            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400'
-            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'
+            ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/45 dark:text-indigo-300'
+            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200'
         )
       }
     >
-      <item.icon className="h-5 w-5" />
-      {item.label}
+      {({ isActive }) => (
+        <>
+          {isActive && (
+            <motion.span
+              layoutId="sidebar-active"
+              className="absolute inset-y-1 left-0 w-1 rounded-full bg-indigo-500"
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            />
+          )}
+          <item.icon className={cn('h-5 w-5 transition-transform duration-200 group-hover:scale-105', isActive && 'text-indigo-600 dark:text-indigo-400')} />
+          {item.label}
+        </>
+      )}
     </NavLink>
   );
 }

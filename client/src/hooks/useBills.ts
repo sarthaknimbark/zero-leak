@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { Bill } from '@/lib/types';
 
 export const billKeys = {
@@ -11,18 +10,8 @@ export function useBills() {
   return useQuery({
     queryKey: billKeys.all,
     queryFn: async () => {
-      if (isApiEnabled()) {
-        await api('/api/bills/sync-overdue', { method: 'POST' });
-        return api<Bill[]>('/api/bills');
-      }
-
-      await supabase.rpc('update_overdue_bills');
-      const { data, error } = await supabase
-        .from('bills')
-        .select('*, category:categories(id,name,color,icon)')
-        .order('due_date', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Bill[];
+      await api('/api/bills/sync-overdue', { method: 'POST' });
+      return api<Bill[]>('/api/bills');
     },
     retry: 1,
   });
@@ -31,14 +20,8 @@ export function useBills() {
 export function useCreateBill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (bill: Omit<Bill, 'id' | 'user_id' | 'created_at' | 'updated_at'>) => {
-      if (isApiEnabled()) {
-        return api<Bill>('/api/bills', { method: 'POST', body: JSON.stringify(bill) });
-      }
-      const { data, error } = await supabase.from('bills').insert([bill]).select().single();
-      if (error) throw error;
-      return data as Bill;
-    },
+    mutationFn: (bill: Omit<Bill, 'id' | 'user_id' | 'created_at' | 'updated_at'>) =>
+      api<Bill>('/api/bills', { method: 'POST', body: JSON.stringify(bill) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: billKeys.all });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -49,14 +32,8 @@ export function useCreateBill() {
 export function useUpdateBill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...bill }: Partial<Bill> & { id: string }) => {
-      if (isApiEnabled()) {
-        return api<Bill>(`/api/bills/${id}`, { method: 'PATCH', body: JSON.stringify(bill) });
-      }
-      const { data, error } = await supabase.from('bills').update(bill).eq('id', id).select().single();
-      if (error) throw error;
-      return data as Bill;
-    },
+    mutationFn: ({ id, ...bill }: Partial<Bill> & { id: string }) =>
+      api<Bill>(`/api/bills/${id}`, { method: 'PATCH', body: JSON.stringify(bill) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: billKeys.all });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -67,14 +44,7 @@ export function useUpdateBill() {
 export function useDeleteBill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      if (isApiEnabled()) {
-        await api(`/api/bills/${id}`, { method: 'DELETE' });
-        return;
-      }
-      const { error } = await supabase.from('bills').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api(`/api/bills/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: billKeys.all });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -85,7 +55,7 @@ export function useDeleteBill() {
 export function useMarkBillAsPaid() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       billId,
       accountId,
       categoryId,
@@ -99,44 +69,17 @@ export function useMarkBillAsPaid() {
       amount: number;
       name: string;
       date: string;
-    }) => {
-      if (isApiEnabled()) {
-        return api<Bill>(`/api/bills/${billId}/pay`, {
-          method: 'POST',
-          body: JSON.stringify({
-            account_id: accountId,
-            category_id: categoryId,
-            amount,
-            name,
-            date,
-          }),
-        });
-      }
-
-      const { error: txError } = await supabase.rpc('apply_transaction', {
-        p_account_id: accountId,
-        p_category_id: categoryId,
-        p_type: 'expense',
-        p_amount: amount,
-        p_date: date,
-        p_time: new Date().toTimeString().split(' ')[0],
-        p_description: `Paid: ${name}`,
-        p_tags: ['bill-payment'],
-        p_notes: 'Paid via Bills & Reminders panel',
-        p_attachment_url: null,
-      });
-      if (txError) throw txError;
-
-      const { data, error: billError } = await supabase
-        .from('bills')
-        .update({ status: 'paid' })
-        .eq('id', billId)
-        .select()
-        .single();
-      if (billError) throw billError;
-
-      return data as Bill;
-    },
+    }) =>
+      api<Bill>(`/api/bills/${billId}/pay`, {
+        method: 'POST',
+        body: JSON.stringify({
+          account_id: accountId,
+          category_id: categoryId,
+          amount,
+          name,
+          date,
+        }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: billKeys.all });
       queryClient.invalidateQueries({ queryKey: ['transactions'] });

@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 
-// Standard VAPID Public Key generated for Zero Leak reminders
 const VAPID_PUBLIC_KEY = 'BLRDmTUkWXSM5WwcP6xyjfYPmL-sHIJO1LfeEQxBbOt3TKsF11JTpH14UZDpOxlZR4FozkRxUW3vs0xPFdDUunQ';
 
 function urlBase64ToUint8Array(base64String: string) {
@@ -47,33 +45,22 @@ export function usePushNotifications() {
     if (!isSupported || !profile) return false;
     setLoading(true);
     try {
-      // 1. Request notification permission
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result !== 'granted') {
         throw new Error('Permission not granted for notifications');
       }
 
-      // 2. Subscribe to push manager
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
 
-      // 3. Save subscription details
-      if (isApiEnabled()) {
-        await api('/api/profile', {
-          method: 'PATCH',
-          body: JSON.stringify({ push_subscription: subscription.toJSON() }),
-        });
-      } else {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ push_subscription: subscription.toJSON() })
-          .eq('id', profile.id);
-        if (error) throw error;
-      }
+      await api('/api/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ push_subscription: subscription.toJSON() }),
+      });
       setIsSubscribed(true);
       return true;
     } catch (e) {
@@ -94,18 +81,10 @@ export function usePushNotifications() {
         await subscription.unsubscribe();
       }
 
-      if (isApiEnabled()) {
-        await api('/api/profile', {
-          method: 'PATCH',
-          body: JSON.stringify({ push_subscription: null }),
-        });
-      } else {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ push_subscription: null })
-          .eq('id', profile.id);
-        if (error) throw error;
-      }
+      await api('/api/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({ push_subscription: null }),
+      });
       setIsSubscribed(false);
       return true;
     } catch (e) {
@@ -122,6 +101,6 @@ export function usePushNotifications() {
     isSubscribed,
     subscribeUser,
     unsubscribeUser,
-    loading
+    loading,
   };
 }

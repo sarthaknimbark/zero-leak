@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { SavingGoal } from '@/lib/types';
 
 export const savingGoalKeys = {
@@ -10,17 +9,7 @@ export const savingGoalKeys = {
 export function useSavingGoals() {
   return useQuery({
     queryKey: savingGoalKeys.all,
-    queryFn: async () => {
-      if (isApiEnabled()) {
-        return api<SavingGoal[]>('/api/saving-goals');
-      }
-      const { data, error } = await supabase
-        .from('saving_goals')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as SavingGoal[];
-    },
+    queryFn: () => api<SavingGoal[]>('/api/saving-goals'),
     retry: 1,
   });
 }
@@ -28,19 +17,9 @@ export function useSavingGoals() {
 export function useCreateSavingGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (
+    mutationFn: (
       goal: Omit<SavingGoal, 'id' | 'user_id' | 'current_amount' | 'created_at' | 'updated_at'>
-    ) => {
-      if (isApiEnabled()) {
-        return api<SavingGoal>('/api/saving-goals', {
-          method: 'POST',
-          body: JSON.stringify(goal),
-        });
-      }
-      const { data, error } = await supabase.from('saving_goals').insert([goal]).select().single();
-      if (error) throw error;
-      return data as SavingGoal;
-    },
+    ) => api<SavingGoal>('/api/saving-goals', { method: 'POST', body: JSON.stringify(goal) }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savingGoalKeys.all });
     },
@@ -50,14 +29,7 @@ export function useCreateSavingGoal() {
 export function useDeleteSavingGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => {
-      if (isApiEnabled()) {
-        await api(`/api/saving-goals/${id}`, { method: 'DELETE' });
-        return;
-      }
-      const { error } = await supabase.from('saving_goals').delete().eq('id', id);
-      if (error) throw error;
-    },
+    mutationFn: (id: string) => api(`/api/saving-goals/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savingGoalKeys.all });
     },
@@ -67,7 +39,7 @@ export function useDeleteSavingGoal() {
 export function useDepositToGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       goalId,
       accountId,
       amount,
@@ -75,21 +47,11 @@ export function useDepositToGoal() {
       goalId: string;
       accountId: string;
       amount: number;
-    }) => {
-      if (isApiEnabled()) {
-        await api(`/api/saving-goals/${goalId}/deposit`, {
-          method: 'POST',
-          body: JSON.stringify({ account_id: accountId, amount }),
-        });
-        return;
-      }
-      const { error } = await supabase.rpc('deposit_to_saving_goal', {
-        p_goal_id: goalId,
-        p_account_id: accountId,
-        p_amount: amount,
-      });
-      if (error) throw error;
-    },
+    }) =>
+      api(`/api/saving-goals/${goalId}/deposit`, {
+        method: 'POST',
+        body: JSON.stringify({ account_id: accountId, amount }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savingGoalKeys.all });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
@@ -102,7 +64,7 @@ export function useDepositToGoal() {
 export function useWithdrawFromGoal() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({
+    mutationFn: ({
       goalId,
       accountId,
       amount,
@@ -110,21 +72,11 @@ export function useWithdrawFromGoal() {
       goalId: string;
       accountId: string;
       amount: number;
-    }) => {
-      if (isApiEnabled()) {
-        await api(`/api/saving-goals/${goalId}/withdraw`, {
-          method: 'POST',
-          body: JSON.stringify({ account_id: accountId, amount }),
-        });
-        return;
-      }
-      const { error } = await supabase.rpc('withdraw_from_saving_goal', {
-        p_goal_id: goalId,
-        p_account_id: accountId,
-        p_amount: amount,
-      });
-      if (error) throw error;
-    },
+    }) =>
+      api(`/api/saving-goals/${goalId}/withdraw`, {
+        method: 'POST',
+        body: JSON.stringify({ account_id: accountId, amount }),
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: savingGoalKeys.all });
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

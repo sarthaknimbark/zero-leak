@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { api, isApiEnabled } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { Profile } from '@/lib/types';
 
 interface AuthContextValue {
@@ -25,52 +25,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profileError, setProfileError] = useState<string | null>(null);
   const loadingRef = useRef(false);
 
-  const loadProfile = async (userId: string, email?: string) => {
-    if (isApiEnabled()) {
-      try {
-        const me = await api<{ profile: Profile }>('/api/auth/me');
-        setProfileError(null);
-        setProfile(me.profile);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load profile';
-        console.error('Profile load error:', message);
-        setProfileError(message);
-      }
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) {
-      console.error('Profile load error:', error.message);
-      setProfileError(error.message);
-      return;
-    }
-    if (!data && email) {
-      const fallbackName = email.split('@')[0];
-      const { data: insertData, error: insertError } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: email,
-          full_name: fallbackName
-        })
-        .select()
-        .maybeSingle();
-      if (insertError) {
-        console.error('Failed to auto-create profile:', insertError.message);
-        setProfileError(insertError.message);
-        return;
-      }
+  const loadProfile = async (_userId: string, _email?: string) => {
+    try {
+      const me = await api<{ profile: Profile }>('/api/auth/me');
       setProfileError(null);
-      setProfile(insertData as Profile | null);
-      return;
+      setProfile(me.profile);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load profile';
+      console.error('Profile load error:', message);
+      setProfileError(message);
     }
-    setProfileError(null);
-    setProfile(data as Profile | null);
   };
 
   useEffect(() => {
