@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, toQuery } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
+import { useAuth } from '@/context/AuthContext';
 import type { Account, Transaction, Transfer, Category } from '@/lib/types';
 
 interface DashboardData {
@@ -19,9 +20,11 @@ interface DashboardData {
 }
 
 export function useDashboard() {
+  const { session } = useAuth();
   return useQuery({
     queryKey: queryKeys.dashboard,
     queryFn: () => api<DashboardData>('/api/dashboard'),
+    enabled: !!session?.access_token,
   });
 }
 

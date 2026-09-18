@@ -2,13 +2,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { wakeApi } from './lib/api';
 
-// Register service worker for Web Push Notifications
+// Warm the API as early as possible (before React mounts).
+void wakeApi();
+
+// Register service worker after first paint so it never blocks boot.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
-      .then(reg => console.log('Service Worker registered successfully:', reg.scope))
-      .catch(err => console.error('Service Worker registration failed:', err));
+    window.setTimeout(() => {
+      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }, 1500);
   });
 }
 

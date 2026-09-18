@@ -1,12 +1,15 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/queries';
+import { useAuth } from '@/context/AuthContext';
 import type { Account } from '@/lib/types';
 
 export function useAccounts() {
+  const { session } = useAuth();
   return useQuery({
     queryKey: queryKeys.accounts,
     queryFn: () => api<Account[]>('/api/accounts'),
+    enabled: !!session?.access_token,
     retry: 1,
   });
 }

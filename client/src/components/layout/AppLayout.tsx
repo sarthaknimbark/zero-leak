@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, Wallet, ArrowLeftRight, TrendingUp, Search,
   Tags, Download, Settings, LogOut, Plus, Menu, X,
-  PiggyBank, ArrowDownCircle, ArrowRightLeft,
+  PiggyBank, ArrowDownCircle, ArrowRightLeft, Gift,
   Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users, Grid2X2,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
@@ -26,7 +26,7 @@ const mainNav: NavItem[] = [
   { to: '/transactions', label: 'Transactions', icon: TrendingUp },
   { to: '/transfers', label: 'Transfers', icon: ArrowLeftRight },
   { to: '/analytics', label: 'Analytics', icon: TrendingUp },
-  { to: '/savings', label: 'Saving Goals', icon: PiggyBank },
+  { to: '/savings', label: 'Wishlist', icon: Gift },
 ];
 
 const moreNav: NavItem[] = [

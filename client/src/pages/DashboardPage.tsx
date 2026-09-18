@@ -19,7 +19,7 @@ import { QueryError } from '@/components/ui/QueryError';
 const CHART_COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'];
 
 export function DashboardPage() {
-  const { data: dash, isLoading, isError, refetch } = useDashboard();
+  const { data: dash, isPending, isError, error, refetch } = useDashboard();
   const { data: accounts } = useAccounts();
 
   const cashFlowData = useMemo(() => {
@@ -56,12 +56,17 @@ export function DashboardPage() {
   const recentTx = dash?.transactions.slice(0, 6) ?? [];
   const recentTransfers = dash?.transfers.slice(0, 4) ?? [];
 
-  if (isLoading) {
+  if (isPending) {
     return <PageSpinner />;
   }
 
   if (isError || !dash) {
-    return <QueryError onRetry={() => refetch()} />;
+    return (
+      <QueryError
+        message={error instanceof Error ? error.message : undefined}
+        onRetry={() => refetch()}
+      />
+    );
   }
 
   const empty = dash.accounts.length === 0;

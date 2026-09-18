@@ -45,10 +45,11 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 async function start() {
-  const status = await checkDatabaseConnection();
-
+  // Listen immediately so /health/live can wake cold hosts while DB check runs.
   app.listen(env.port, '0.0.0.0', () => {
-    printStartupBanner(status, env.port);
+    void checkDatabaseConnection().then((status) => {
+      printStartupBanner(status, env.port);
+    });
   });
 }
 

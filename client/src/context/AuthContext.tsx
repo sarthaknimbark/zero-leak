@@ -1,8 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
-import { api } from '@/lib/api';
+import { api, setApiAccessToken, wakeApi } from '@/lib/api';
 import type { Profile } from '@/lib/types';
+
+const PROFILE_CACHE_KEY = 'zl_profile_cache_v1';
 
 interface AuthContextValue {
   session: Session | null;
@@ -18,19 +20,52 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+function readCachedProfile(userId: string): Profile | null {
+  try {
+    const raw = sessionStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { userId: string; profile: Profile };
+    if (parsed.userId !== userId || !parsed.profile) return null;
+    return parsed.profile;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProfile(userId: string, profile: Profile) {
+  try {
+    sessionStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify({ userId, profile }));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+function clearCachedProfile() {
+  try {
+    sessionStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const loadingRef = useRef(false);
+  const profileLoadId = useRef(0);
+  const readyRef = useRef(false);
 
-  const loadProfile = async (_userId: string, _email?: string) => {
+  const loadProfile = async (userId: string) => {
+    const requestId = ++profileLoadId.current;
     try {
       const me = await api<{ profile: Profile }>('/api/auth/me');
+      if (requestId !== profileLoadId.current) return;
       setProfileError(null);
       setProfile(me.profile);
+      writeCachedProfile(userId, me.profile);
     } catch (err) {
+      if (requestId !== profileLoadId.current) return;
       const message = err instanceof Error ? err.message : 'Failed to load profile';
       console.error('Profile load error:', message);
       setProfileError(message);
@@ -39,37 +74,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    void wakeApi();
 
-    supabase.auth.getSession().then(({ data }) => {
+    const applySession = (next: Session | null, fetchProfile: boolean) => {
       if (!mounted) return;
-      setSession(data.session);
-      if (data.session?.user) {
-        loadingRef.current = true;
-        loadProfile(data.session.user.id, data.session.user.email).finally(() => {
-          if (mounted) {
-            loadingRef.current = false;
-            setLoading(false);
-          }
-        });
+      setSession(next);
+      setApiAccessToken(next?.access_token ?? null);
+
+      if (next?.user) {
+        const cached = readCachedProfile(next.user.id);
+        if (cached) setProfile((prev) => prev ?? cached);
+        if (fetchProfile) void loadProfile(next.user.id);
       } else {
+        setProfile(null);
+        setProfileError(null);
+        clearCachedProfile();
+      }
+    };
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      if (!mounted) return;
+
+      if (event === 'INITIAL_SESSION') {
+        applySession(newSession, true);
+        readyRef.current = true;
+        setLoading(false);
+        return;
+      }
+
+      if (event === 'TOKEN_REFRESHED') {
+        setSession(newSession);
+        setApiAccessToken(newSession?.access_token ?? null);
+        return;
+      }
+
+      applySession(newSession, event === 'SIGNED_IN' || event === 'USER_UPDATED');
+
+      if (event === 'SIGNED_OUT') {
+        clearCachedProfile();
+        setProfile(null);
+        setProfileError(null);
+      }
+
+      if (!readyRef.current) {
+        readyRef.current = true;
         setLoading(false);
       }
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      if (!mounted) return;
-      setSession(newSession);
-      if (newSession?.user && event !== 'TOKEN_REFRESHED') {
-        if (!loadingRef.current) {
-          loadingRef.current = true;
-          loadProfile(newSession.user.id, newSession.user.email).finally(() => {
-            loadingRef.current = false;
-          });
-        }
-      } else if (!newSession) {
-        setProfile(null);
-        setProfileError(null);
-      }
+    // Fallback if INITIAL_SESSION is delayed/missing in some environments.
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted || readyRef.current) return;
+      applySession(data.session, true);
+      readyRef.current = true;
+      setLoading(false);
     });
 
     return () => {
@@ -79,11 +137,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    setApiAccessToken(session?.access_token ?? null);
+  }, [session]);
+
+  useEffect(() => {
     if (profile?.pin_enabled) {
       const storedPin = localStorage.getItem('security_pin');
       if (!storedPin) {
         console.warn('Security alert: PIN is enabled in database but missing from local storage! Signing out.');
-        signOut();
+        void signOut();
       }
     }
   }, [profile]);
@@ -106,18 +168,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    setApiAccessToken(null);
+    clearCachedProfile();
     setProfile(null);
     setSession(null);
     setProfileError(null);
   };
 
   const refreshProfile = async () => {
-    if (session?.user) await loadProfile(session.user.id, session.user.email);
+    if (session?.user) await loadProfile(session.user.id);
   };
 
   return (
     <AuthContext.Provider
-      value={{ session, user: session?.user ?? null, profile, loading, profileError, signUp, signIn, signOut, refreshProfile }}
+      value={{
+        session,
+        user: session?.user ?? null,
+        profile,
+        loading,
+        profileError,
+        signUp,
+        signIn,
+        signOut,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -8,33 +8,90 @@ if (!API_BASE) {
   );
 }
 
-async function authHeaders(): Promise<HeadersInit> {
+/** In-memory access token — avoids supabase.auth.getSession() on every request. */
+let cachedAccessToken: string | null = null;
+let wakePromise: Promise<void> | null = null;
+
+export function setApiAccessToken(token: string | null) {
+  cachedAccessToken = token;
+}
+
+export function getApiAccessToken() {
+  return cachedAccessToken;
+}
+
+/** Fire-and-forget ping so Render/local server is warm before real API calls. */
+export function wakeApi(): Promise<void> {
+  if (wakePromise) return wakePromise;
+  wakePromise = fetch(`${API_BASE}/health/live`, {
+    method: 'GET',
+    cache: 'no-store',
+    keepalive: true,
+  })
+    .then(() => undefined)
+    .catch(() => undefined);
+  return wakePromise;
+}
+
+async function resolveToken(): Promise<string | null> {
+  if (cachedAccessToken) return cachedAccessToken;
   const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  cachedAccessToken = data.session?.access_token ?? null;
+  return cachedAccessToken;
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const { data, error } = await supabase.auth.refreshSession();
+  if (error || !data.session) {
+    cachedAccessToken = null;
+    return null;
+  }
+  cachedAccessToken = data.session.access_token;
+  return cachedAccessToken;
+}
+
+async function parseBody<T>(res: Response): Promise<({ error?: string } & T) | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as { error?: string } & T;
+  } catch {
+    throw new Error(res.ok ? 'Invalid JSON response' : res.statusText || 'Request failed');
+  }
+}
+
+function errorMessage(body: { error?: string } | null, res: Response) {
+  if (body && typeof body === 'object' && body.error) return String(body.error);
+  return res.statusText || 'Request failed';
 }
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: {
-      ...(await authHeaders()),
-      ...init.headers,
-    },
-  });
+  let token = await resolveToken();
 
-  const text = await res.text();
-  const body = text ? (JSON.parse(text) as { error?: string } & T) : (null as T | null);
+  const doFetch = (accessToken: string | null) =>
+    fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...init.headers,
+      },
+    });
+
+  let res = await doFetch(token);
+  let body = await parseBody<T>(res);
+
+  // One refresh+retry on auth failure (expired JWT after idle).
+  if (res.status === 401) {
+    token = await refreshAccessToken();
+    if (token) {
+      res = await doFetch(token);
+      body = await parseBody<T>(res);
+    }
+  }
 
   if (!res.ok) {
-    const message =
-      body && typeof body === 'object' && 'error' in body && body.error
-        ? String(body.error)
-        : res.statusText || 'Request failed';
-    throw new Error(message);
+    throw new Error(errorMessage(body, res));
   }
 
   return body as T;

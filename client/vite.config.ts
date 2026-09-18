@@ -11,8 +11,15 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['lucide-react'],
+    include: [
+      'lucide-react',
+      '@supabase/supabase-js',
+      '@tanstack/react-query',
+      'framer-motion',
+      'date-fns',
+    ],
   },
+
   build: {
     rollupOptions: {
       output: {

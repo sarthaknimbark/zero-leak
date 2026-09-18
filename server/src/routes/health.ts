@@ -4,6 +4,15 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const healthRouter = Router();
 
+/** Instant liveness — used by the client to wake a cold host without waiting on DB. */
+healthRouter.get('/health/live', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    service: 'zero-leak-server',
+    timestamp: new Date().toISOString(),
+  });
+});
+
 healthRouter.get(
   '/health',
   asyncHandler(async (_req, res) => {
