@@ -1,19 +1,26 @@
 import cors from 'cors';
 import { env } from '../config/env.js';
 
+function isVercelOrigin(origin: string): boolean {
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'vercel.app' || host.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
+}
+
 function originAllowed(origin: string): boolean {
   const allowed = env.allowedOrigins;
   if (allowed.includes('*')) return true;
   if (allowed.includes(origin)) return true;
 
-  // Support https://*.vercel.app in ALLOWED_ORIGINS
+  // Always allow Vercel frontends (production + preview deployments)
+  if (isVercelOrigin(origin)) return true;
+
+  // Explicit wildcard entries still supported
   if (allowed.some((entry) => entry === 'https://*.vercel.app' || entry === '*.vercel.app')) {
-    try {
-      const host = new URL(origin).hostname;
-      return host === 'vercel.app' || host.endsWith('.vercel.app');
-    } catch {
-      return false;
-    }
+    return isVercelOrigin(origin);
   }
 
   return false;
@@ -21,7 +28,6 @@ function originAllowed(origin: string): boolean {
 
 export const corsMiddleware = cors({
   origin(origin, callback) {
-    // Allow non-browser clients (cron, health checks) with no Origin header
     if (!origin) {
       callback(null, true);
       return;
@@ -33,7 +39,8 @@ export const corsMiddleware = cors({
     }
 
     console.warn(`CORS blocked origin: ${origin}`);
-    callback(new Error(`CORS blocked for origin: ${origin}`));
+    // Do not throw — throwing becomes 403 without CORS headers and confuses browsers
+    callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
