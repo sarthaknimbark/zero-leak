@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ModalProps {
   open: boolean;
@@ -22,11 +23,17 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
   }, []);
 
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-      return () => { document.body.style.overflow = ''; };
-    }
-  }, [open]);
+    if (!open) return;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = '';
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open, onClose]);
 
   const maxWidth = size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg';
 
@@ -40,24 +47,26 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
       : { y: 0, opacity: 0, scale: 0.95 }
   };
 
-  return (
+  const overlay = (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+        <div className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-4">
           <motion.div
+            inherit={false}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-slate-900/30 backdrop-blur-md"
+            className="absolute inset-0 bg-slate-900/40 dark:bg-slate-950/60"
             onClick={onClose}
           />
           <motion.div
+            inherit={false}
             variants={modalVariants}
             initial="initial"
             animate="animate"
             exit="exit"
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className={`relative w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-t-3xl border border-slate-200/70 bg-white shadow-float dark:border-slate-700/60 dark:bg-slate-900 sm:rounded-2xl`}
+            className={`relative z-10 w-full ${maxWidth} max-h-[90vh] overflow-y-auto rounded-t-3xl border border-slate-200/70 bg-white shadow-float dark:border-slate-700/60 dark:bg-slate-900 sm:rounded-2xl`}
           >
             <div className="sticky top-0 z-10 flex items-start justify-between border-b border-slate-100 bg-white/90 px-6 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
               <div>
@@ -74,4 +83,6 @@ export function Modal({ open, onClose, title, description, children, size = 'md'
       )}
     </AnimatePresence>
   );
+
+  return createPortal(overlay, document.body);
 }
