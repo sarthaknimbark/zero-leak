@@ -128,4 +128,6 @@ export interface Debt {
   status: 'pending' | 'settled';
   date: string;
   created_at: string;
+  account_id?: string | null;
 }
+

@@ -1,21 +1,53 @@
 import { useState, useMemo } from 'react';
 import { 
   Users, Plus, Trash2, Check, X, Calendar, Search, CheckSquare,
-  ChevronDown, ChevronUp, AlertCircle, Info, ArrowUpRight, ArrowDownLeft, CheckCircle2
+  ChevronDown, ChevronUp, AlertCircle, Info, ArrowUpRight, ArrowDownLeft, CheckCircle2,
+  Wallet, Coins, Sparkles
 } from 'lucide-react';
-import { useDebts, useAddDebt, useUpdateDebtStatus, useDeleteDebt } from '@/hooks/useDebts';
+import { useDebts, useAddDebt, useUpdateDebtStatus, useDeleteDebt, useSettleDebt } from '@/hooks/useDebts';
+import { useActiveAccounts } from '@/hooks/useAccounts';
+import { Modal } from '@/components/ui/Modal';
 import { formatCurrency, formatDate } from '@/lib/format';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { SkeletonList, QueryError as ErrorBox } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
+import type { Debt } from '@/lib/types';
+
+function roundMoney(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+function parseDebtDescription(description: string | null) {
+  if (!description) return { cleanDescription: '', settledAccount: null, isPartial: false };
+  const isPartial = description.toLowerCase().includes('partial settle');
+  
+  // Look for "Settled via <Account>" or "[Settled via <Account>]" or "[via <Account>]"
+  const match = description.match(/(?:•\s*)?(?:\[(?:Settled\s+via\s+|via\s+)([^\]]+)\]|Settled\s+via\s+([^•\n]+))/i);
+  const settledAccount = match ? (match[1] || match[2]).trim() : null;
+
+  let cleanDescription = description
+    .replace(/(?:•\s*)?(?:\[(?:Settled\s+via\s+|via\s+)([^\]]+)\]|Settled\s+via\s+[^•\n]+)/gi, '')
+    .trim();
+  if (cleanDescription.endsWith('•')) {
+    cleanDescription = cleanDescription.slice(0, -1).trim();
+  }
+
+  return { cleanDescription, settledAccount, isPartial };
+}
+
+type SettleTarget = 
+  | { type: 'item'; item: Debt }
+  | { type: 'person'; friendName: string; netBalance: number; direction: 'lent' | 'borrowed' };
 
 export function DebtsPage() {
   const { showToast } = useToast();
   const { data: debts, isLoading, isError } = useDebts();
+  const { data: accounts } = useActiveAccounts();
   
   const addDebtMutation = useAddDebt();
   const updateDebtStatusMutation = useUpdateDebtStatus();
   const deleteDebtMutation = useDeleteDebt();
+  const settleDebtMutation = useSettleDebt();
 
   // Navigation / Filter Tabs
   const [activeTab, setActiveTab] = useState<'active' | 'settled'>('active');
@@ -29,6 +61,12 @@ export function DebtsPage() {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
 
+  // Settlement Modal State
+  const [settleTarget, setSettleTarget] = useState<SettleTarget | null>(null);
+  const [settleAccountId, setSettleAccountId] = useState('');
+  const [settleAmount, setSettleAmount] = useState('');
+  const [settleNotes, setSettleNotes] = useState('');
+
   // Accordion State for expanded friends
   const [expandedFriends, setExpandedFriends] = useState<Record<string, boolean>>({});
   // Expandable item state
@@ -41,8 +79,25 @@ export function DebtsPage() {
     }));
   };
 
+  const openSettleModalForItem = (item: Debt) => {
+    setSettleTarget({ type: 'item', item });
+    setSettleAmount(String(item.amount));
+    setSettleNotes('');
+    if (accounts && accounts.length > 0) {
+      setSettleAccountId(prev => prev || accounts[0].id);
+    }
+  };
 
-  // Form Submission
+  const openSettleModalForPerson = (friendName: string, netBalance: number, direction: 'lent' | 'borrowed') => {
+    setSettleTarget({ type: 'person', friendName, netBalance: Math.abs(netBalance), direction });
+    setSettleAmount(String(Math.abs(netBalance)));
+    setSettleNotes('');
+    if (accounts && accounts.length > 0) {
+      setSettleAccountId(prev => prev || accounts[0].id);
+    }
+  };
+
+  // Form Submission for New Debt
   const handleAddDebt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!friendName.trim() || !amount || Number(amount) <= 0) {
@@ -70,32 +125,75 @@ export function DebtsPage() {
     }
   };
 
-  // Toggle Status (Pending / Settled)
-  const handleToggleStatus = async (id: string, currentStatus: 'pending' | 'settled') => {
-    const nextStatus = currentStatus === 'pending' ? 'settled' : 'pending';
-    try {
-      await updateDebtStatusMutation.mutateAsync({ id, status: nextStatus });
-      showToast(`Marked as ${nextStatus}`, 'success');
-    } catch {
-      showToast('Failed to update status', 'error');
+  // Toggle Status (Pending -> opens settle modal; Settled -> asks to re-open as pending)
+  const handleToggleStatus = async (item: Debt) => {
+    if (item.status === 'pending') {
+      openSettleModalForItem(item);
+    } else {
+      if (!confirm('Re-open this settled entry as pending?')) return;
+      try {
+        await updateDebtStatusMutation.mutateAsync({ id: item.id, status: 'pending' });
+        showToast('Re-opened as pending', 'success');
+      } catch {
+        showToast('Failed to update status', 'error');
+      }
     }
   };
 
-  // Settle All Pending Items for a Friend
-  const handleSettleAllForFriend = async (friendName: string, items: typeof debts) => {
-    if (!items) return;
-    const pendingItems = items.filter(item => item.friend_name === friendName && item.status === 'pending');
-    if (pendingItems.length === 0) return;
+  // Submit Settlement (Full or Partial with Selected Account)
+  const handleConfirmSettle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!settleTarget) return;
 
-    if (!confirm(`Mark all ${pendingItems.length} pending items for ${friendName} as settled?`)) return;
+    const targetMax = settleTarget.type === 'item' 
+      ? Number(settleTarget.item.amount) 
+      : settleTarget.netBalance;
+
+    const numAmount = parseFloat(settleAmount);
+
+    if (!settleAccountId) {
+      showToast('Please select an account', 'error');
+      return;
+    }
+
+    if (!numAmount || numAmount <= 0) {
+      showToast('Please enter a valid positive settle amount', 'error');
+      return;
+    }
+
+    if (numAmount > targetMax + 0.009) {
+      showToast(`Amount cannot exceed outstanding balance of ${formatCurrency(targetMax)}`, 'error');
+      return;
+    }
+
+    const isPartial = numAmount < targetMax - 0.009;
 
     try {
-      await Promise.all(
-        pendingItems.map(item => updateDebtStatusMutation.mutateAsync({ id: item.id, status: 'settled' }))
+      if (settleTarget.type === 'item') {
+        await settleDebtMutation.mutateAsync({
+          debt_id: settleTarget.item.id,
+          account_id: settleAccountId,
+          amount: numAmount,
+          notes: settleNotes.trim() || undefined,
+        });
+      } else {
+        await settleDebtMutation.mutateAsync({
+          friend_name: settleTarget.friendName,
+          account_id: settleAccountId,
+          amount: numAmount,
+          notes: settleNotes.trim() || undefined,
+        });
+      }
+
+      showToast(
+        isPartial 
+          ? `Partial settlement of ${formatCurrency(numAmount)} recorded` 
+          : `Settlement of ${formatCurrency(numAmount)} completed successfully`,
+        'success'
       );
-      showToast(`All items for ${friendName} settled!`, 'success');
-    } catch {
-      showToast('Failed to settle all items', 'error');
+      setSettleTarget(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to settle debt', 'error');
     }
   };
 
@@ -193,12 +291,30 @@ export function DebtsPage() {
     }));
   };
 
+  // Target details for Settlement Modal
+  const targetMaxAmount = settleTarget
+    ? settleTarget.type === 'item'
+      ? Number(settleTarget.item.amount)
+      : settleTarget.netBalance
+    : 0;
+
+  const isLentTarget = settleTarget
+    ? settleTarget.type === 'item'
+      ? settleTarget.item.type === 'lent'
+      : settleTarget.direction === 'lent'
+    : false;
+
+  const numSettleAmount = parseFloat(settleAmount) || 0;
+  const isPartialAmount = numSettleAmount > 0 && numSettleAmount < targetMaxAmount - 0.009;
+  const remainingDebt = Math.max(0, roundMoney(targetMaxAmount - numSettleAmount));
+  const selectedAccount = accounts?.find(a => a.id === settleAccountId);
+
   if (isLoading) return <SkeletonList count={4} />;
   if (isError) return <ErrorBox message="Could not load your debt ledger." />;
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Debt Tracker" subtitle="Manage manual loans and helper ledger with friends" icon={Users} />
+      <PageHeader title="Debt Tracker" subtitle="Manage loans, helper ledger, and partial account settlements" icon={Users} />
 
       {/* Global Net Balance Banners */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -401,9 +517,6 @@ export function DebtsPage() {
             const totalCount = group.items.length;
             const progressPercent = totalCount > 0 ? (settledCount / totalCount) * 100 : 0;
 
-            const pendingLentItems = group.items.filter(item => item.status === 'pending' && item.type === 'lent');
-            const pendingBorrowedItems = group.items.filter(item => item.status === 'pending' && item.type === 'borrowed');
-
             return (
               <div 
                 key={group.friend_name} 
@@ -436,7 +549,7 @@ export function DebtsPage() {
                     </div>
                   </button>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 border-t sm:border-t-0 border-slate-100 dark:border-slate-800/60 pt-2.5 sm:pt-0 shrink-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-3.5 border-t sm:border-t-0 border-slate-100 dark:border-slate-800/60 pt-2.5 sm:pt-0 shrink-0">
                     {/* Net Balance calculations display */}
                     <div className="text-left sm:text-right">
                       <p className={`text-xs font-bold whitespace-nowrap ${
@@ -456,16 +569,20 @@ export function DebtsPage() {
                       <p className="text-[9px] text-slate-400 uppercase font-semibold tracking-wider mt-0.5">Net Owed</p>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                      {/* Settle All action button */}
-                      {activeTab === 'active' && group.pendingCount > 0 && (
+                    <div className="flex items-center gap-2">
+                      {/* Settle Balance button (allows full or partial settlement into chosen account) */}
+                      {activeTab === 'active' && group.pendingCount > 0 && group.netBalance !== 0 && (
                         <button
-                          onClick={() => handleSettleAllForFriend(group.friend_name, group.items)}
-                          className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 border border-emerald-100 dark:border-emerald-900/30 rounded-lg transition"
-                          title="Mark all items for this person as settled"
+                          onClick={() => openSettleModalForPerson(
+                            group.friend_name, 
+                            group.netBalance, 
+                            group.netBalance > 0 ? 'lent' : 'borrowed'
+                          )}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800/50 rounded-xl transition shadow-xs"
+                          title="Settle full or partial balance into an account"
                         >
-                          <CheckSquare className="h-3 w-3" />
-                          Settle All
+                          <Coins className="h-3.5 w-3.5" />
+                          <span>Settle Balance</span>
                         </button>
                       )}
 
@@ -486,6 +603,8 @@ export function DebtsPage() {
                     <div className="space-y-3">
                       {filteredItems.map(item => {
                         const isItemExpanded = !!expandedItems[item.id];
+                        const { cleanDescription, settledAccount, isPartial } = parseDebtDescription(item.description);
+
                         return (
                           <div 
                             key={item.id} 
@@ -504,19 +623,37 @@ export function DebtsPage() {
                                   {item.type === 'lent' ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownLeft className="h-4 w-4" />}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className={`text-xs font-bold text-slate-850 dark:text-slate-150 ${
-                                    isItemExpanded ? 'break-words' : 'truncate max-w-[150px] sm:max-w-[280px]'
-                                  }`}>
-                                    {item.description || (item.type === 'lent' ? 'Money lent' : 'Money borrowed')}
-                                  </p>
-                                  <div className="flex items-center gap-1.5 text-[10px] text-slate-450 mt-0.5">
-                                    <Calendar className="h-2.5 w-2.5 shrink-0" />
-                                    <span>{formatDate(item.date)}</span>
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <p className={`text-xs font-bold text-slate-850 dark:text-slate-150 ${
+                                      isItemExpanded ? 'break-words' : 'truncate max-w-[150px] sm:max-w-[280px]'
+                                    }`}>
+                                      {cleanDescription || (item.type === 'lent' ? 'Money lent' : 'Money borrowed')}
+                                    </p>
+                                    {isPartial && (
+                                      <span className="inline-flex items-center px-1.5 py-0.2 text-[9px] font-bold uppercase rounded bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/50">
+                                        Partial
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-450 mt-1">
+                                    <div className="flex items-center gap-1">
+                                      <Calendar className="h-2.5 w-2.5 shrink-0" />
+                                      <span>{formatDate(item.date)}</span>
+                                    </div>
+
+                                    {/* Display settled account pill */}
+                                    {settledAccount && (
+                                      <div className="flex items-center gap-1 font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded-md border border-indigo-100/60 dark:border-indigo-800/40">
+                                        <Wallet className="h-2.5 w-2.5 shrink-0" />
+                                        <span>Settled via {settledAccount}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-4 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                                 <div className="text-right">
                                   <p className={`font-bold tabular-nums text-xs ${
                                     item.type === 'lent' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-455'
@@ -532,15 +669,27 @@ export function DebtsPage() {
                                   </span>
                                 </div>
 
-                                <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-3.5">
+                                <div className="flex items-center gap-1.5 border-l border-slate-200 dark:border-slate-800 pl-3">
+                                  {/* Dedicated Settle Action for Pending Items */}
+                                  {item.status === 'pending' && (
+                                    <button
+                                      onClick={() => openSettleModalForItem(item)}
+                                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/40 transition"
+                                      title="Settle full or partial amount into an account"
+                                    >
+                                      <Coins className="h-3.5 w-3.5" />
+                                      <span className="hidden sm:inline">Settle</span>
+                                    </button>
+                                  )}
+
                                   <button
-                                    onClick={() => handleToggleStatus(item.id, item.status)}
+                                    onClick={() => handleToggleStatus(item)}
                                     className={`p-2 rounded-lg transition hover:bg-slate-100 dark:hover:bg-slate-800 ${
                                       item.status === 'pending'
                                         ? 'text-emerald-600 hover:text-emerald-700 dark:text-emerald-400'
                                         : 'text-slate-400 hover:text-slate-650 dark:text-slate-400 dark:hover:text-slate-200'
                                     }`}
-                                    title={item.status === 'pending' ? 'Mark as Settled' : 'Re-open Entry'}
+                                    title={item.status === 'pending' ? 'Settle Entry' : 'Re-open Entry as Pending'}
                                   >
                                     <Check className="h-4.5 w-4.5" />
                                   </button>
@@ -555,10 +704,24 @@ export function DebtsPage() {
                               </div>
                             </div>
 
-                            {isItemExpanded && item.description && (
-                              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-2.5 mt-2.5 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed bg-slate-50/50 dark:bg-slate-900/40 p-2.5 rounded-lg" onClick={(e) => e.stopPropagation()}>
-                                <span className="font-semibold block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Full Note:</span>
-                                {item.description}
+                            {/* Expanded details */}
+                            {isItemExpanded && (
+                              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 mt-3 space-y-2 text-xs text-slate-650 dark:text-slate-350" onClick={(e) => e.stopPropagation()}>
+                                {settledAccount && (
+                                  <div className="flex items-center gap-2 p-2.5 rounded-lg bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-indigo-900 dark:text-indigo-200">
+                                    <Wallet className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                    <div>
+                                      <span className="text-[10px] uppercase font-bold text-indigo-500 dark:text-indigo-400 block tracking-wider">Settled Account</span>
+                                      <span className="font-semibold text-xs">{settledAccount}</span>
+                                    </div>
+                                  </div>
+                                )}
+                                {cleanDescription && (
+                                  <div className="bg-slate-50/60 dark:bg-slate-900/40 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                    <span className="font-semibold block text-[10px] text-slate-400 uppercase tracking-wider mb-1">Note / Description</span>
+                                    <p className="text-slate-700 dark:text-slate-300 leading-relaxed">{cleanDescription}</p>
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -572,6 +735,178 @@ export function DebtsPage() {
           })
         )}
       </div>
+
+      {/* Settle Debt Modal (Full / Partial Amount with Account Selection) */}
+      {settleTarget && (
+        <Modal
+          open={!!settleTarget}
+          onClose={() => setSettleTarget(null)}
+          title={
+            settleTarget.type === 'item'
+              ? `Settle Debt — ${settleTarget.item.friend_name}`
+              : `Settle Balance with ${settleTarget.friendName}`
+          }
+          description="Choose the account and specify whether to settle the full or partial amount."
+        >
+          <form onSubmit={handleConfirmSettle} className="space-y-4 pt-1">
+            {/* Direction & Outstanding Summary Banner */}
+            <div className={`p-4 rounded-xl border flex items-center justify-between ${
+              isLentTarget
+                ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-200/80 dark:border-emerald-900/40'
+                : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-200/80 dark:border-rose-900/40'
+            }`}>
+              <div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  {isLentTarget ? 'Money Lent (Receiving Funds)' : 'Money Borrowed (Paying Out)'}
+                </span>
+                <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                  {settleTarget.type === 'item' ? settleTarget.item.friend_name : settleTarget.friendName}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Outstanding
+                </span>
+                <p className={`text-lg font-black tabular-nums ${
+                  isLentTarget ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'
+                }`}>
+                  {formatCurrency(targetMaxAmount)}
+                </p>
+              </div>
+            </div>
+
+            {/* Account Selection Field */}
+            <div>
+              <label className="label text-slate-700 dark:text-slate-300 flex items-center justify-between mb-1.5">
+                <span className="font-semibold">{isLentTarget ? 'Deposit Into Account' : 'Pay From Account'}</span>
+                <span className="text-[10px] text-slate-400 font-normal">Account balance will update</span>
+              </label>
+              {(!accounts || accounts.length === 0) ? (
+                <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 rounded-xl">
+                  No active accounts found. Please add an account in the Accounts tab before settling.
+                </div>
+              ) : (
+                <select
+                  className="input text-xs bg-white dark:bg-slate-900 dark:border-slate-800"
+                  value={settleAccountId}
+                  onChange={(e) => setSettleAccountId(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>Select an account...</option>
+                  {accounts.map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name} — Balance: {formatCurrency(acc.current_balance)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Settle Amount Field with Quick Presets */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="label text-slate-700 dark:text-slate-300 font-semibold">Settle Amount</label>
+                {/* Quick Presets */}
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSettleAmount(String(targetMaxAmount))}
+                    className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
+                  >
+                    Full ({formatCurrency(targetMaxAmount)})
+                  </button>
+                  {targetMaxAmount > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSettleAmount(String(roundMoney(targetMaxAmount / 2)))}
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition"
+                    >
+                      50% ({formatCurrency(roundMoney(targetMaxAmount / 2))})
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <input
+                type="number"
+                step="0.01"
+                min="0.01"
+                max={targetMaxAmount}
+                className="input text-xs bg-white dark:bg-slate-900 dark:border-slate-800"
+                value={settleAmount}
+                onChange={(e) => setSettleAmount(e.target.value)}
+                placeholder="0.00"
+                required
+              />
+
+              {/* Dynamic visual preview of partial vs full settlement */}
+              <div className="mt-2.5">
+                {numSettleAmount > targetMaxAmount + 0.009 ? (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/30 text-rose-700 dark:text-rose-300 text-xs border border-rose-200 dark:border-rose-900">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>Amount cannot exceed total outstanding debt of {formatCurrency(targetMaxAmount)}.</span>
+                  </div>
+                ) : isPartialAmount ? (
+                  <div className="flex items-start gap-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/25 text-amber-800 dark:text-amber-300 text-xs border border-amber-200 dark:border-amber-900/30">
+                    <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold block">Partial Settlement</span>
+                      <span className="text-[11px] leading-relaxed">
+                        {formatCurrency(numSettleAmount)} will be {isLentTarget ? 'deposited into' : 'paid from'} <strong className="font-semibold">{selectedAccount?.name || 'the account'}</strong>. The remaining balance of <strong className="font-bold">{formatCurrency(remainingDebt)}</strong> will remain active as a pending debt.
+                      </span>
+                    </div>
+                  </div>
+                ) : numSettleAmount > 0 ? (
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/25 text-emerald-800 dark:text-emerald-300 text-xs border border-emerald-200 dark:border-emerald-900/30">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span>Full Settlement: This debt will be marked as completely settled.</span>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Settlement Note Field (Optional) */}
+            <div>
+              <label className="label text-slate-700 dark:text-slate-300 font-semibold mb-1.5">Settlement Note (Optional)</label>
+              <input
+                type="text"
+                className="input text-xs bg-white dark:bg-slate-900 dark:border-slate-800"
+                value={settleNotes}
+                onChange={(e) => setSettleNotes(e.target.value)}
+                placeholder="e.g. Paid via UPI, cash handed over, bank transfer ref"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSettleTarget(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-650 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  settleDebtMutation.isPending ||
+                  !settleAccountId ||
+                  numSettleAmount <= 0 ||
+                  numSettleAmount > targetMaxAmount + 0.009
+                }
+                className="btn-primary px-5 py-2 text-xs flex items-center gap-1.5"
+              >
+                {settleDebtMutation.isPending 
+                  ? 'Settling...' 
+                  : isPartialAmount 
+                    ? 'Confirm Partial Settle' 
+                    : 'Confirm Settlement'
+                }
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }
