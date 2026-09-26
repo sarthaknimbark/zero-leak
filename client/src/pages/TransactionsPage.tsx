@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, Plus, Search, Trash2, Filter, X,
-  ArrowDownCircle, ArrowUpCircle, RefreshCw, Pencil,
+  ArrowDownCircle, ArrowUpCircle, Pencil, CalendarDays, CalendarClock,
 } from 'lucide-react';
 import { useTransactions, type TransactionFilters, useDeleteTransaction, useCreateTransaction } from '@/hooks/useTransactions';
 import { useAccounts } from '@/hooks/useAccounts';
@@ -19,6 +19,77 @@ import { TransactionFormModal } from '@/components/transactions/TransactionFormM
 import { SkeletonList, QueryError as ErrorBox } from '@/components/ui';
 import { cn } from '@/lib/cn';
 
+// ─── helper: compute summary stats ───────────────────────────────────────────
+function computeStats(txns: Transaction[]) {
+  const now = new Date();
+  const todayStr = now.toISOString().split('T')[0];
+  const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  let todayExpense = 0, todayIncome = 0;
+  let monthExpense = 0, monthIncome = 0;
+
+  for (const tx of txns) {
+    const amt = Number(tx.amount);
+    if (tx.date === todayStr) {
+      if (tx.type === 'expense') todayExpense += amt;
+      else if (tx.type === 'income') todayIncome += amt;
+    }
+    if (tx.date.startsWith(thisMonthPrefix)) {
+      if (tx.type === 'expense') monthExpense += amt;
+      else if (tx.type === 'income') monthIncome += amt;
+    }
+  }
+  return { todayExpense, todayIncome, monthExpense, monthIncome };
+}
+
+// ─── summary card ──────────────────────────────────────────────────────────
+function SummaryCard({
+  label, amount, icon: Icon, accent, sub,
+}: {
+  label: string;
+  amount: number;
+  icon: React.ElementType;
+  accent: 'rose' | 'emerald';
+  sub: string;
+}) {
+  const isRose = accent === 'rose';
+  return (
+    <div className={cn(
+      'relative flex items-center gap-3 rounded-2xl border p-4 overflow-hidden',
+      isRose
+        ? 'border-rose-100/70 bg-gradient-to-br from-rose-50/60 to-red-50/30 dark:border-rose-900/30 dark:from-rose-950/20 dark:to-red-950/10'
+        : 'border-emerald-100/70 bg-gradient-to-br from-emerald-50/60 to-teal-50/30 dark:border-emerald-900/30 dark:from-emerald-950/20 dark:to-teal-950/10',
+    )}>
+      {/* decorative blob */}
+      <div className={cn(
+        'absolute -right-4 -top-4 h-16 w-16 rounded-full opacity-20',
+        isRose ? 'bg-rose-400' : 'bg-emerald-400',
+      )} />
+
+      <div className={cn(
+        'shrink-0 flex h-9 w-9 items-center justify-center rounded-xl',
+        isRose
+          ? 'bg-rose-100 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400'
+          : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400',
+      )}>
+        <Icon className="h-4 w-4" />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
+        <p className={cn(
+          'mt-0.5 text-base font-black tabular-nums leading-tight truncate',
+          isRose ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400',
+        )}>
+          {isRose ? '-' : '+'}{formatCurrency(amount)}
+        </p>
+        <p className="text-[9px] text-slate-400 mt-0.5 font-medium">{sub}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── main page ─────────────────────────────────────────────────────────────
 export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
@@ -38,12 +109,18 @@ export function TransactionsPage() {
     }
   }, [searchParams, setSearchParams]);
 
+  // Fetch all transactions (no filters) to compute stats independently of filter selection
+  const { data: allTransactions } = useTransactions({});
   const { data: transactions, isLoading, isError, refetch } = useTransactions({ ...filters, search });
+
   const deleteTx = useDeleteTransaction();
   const createTx = useCreateTransaction();
 
   const activeFilterCount = Object.entries(filters).filter(([, v]) => v != null && v !== '').length;
   const grouped = groupByDate(transactions ?? []);
+
+  // Compute today / month stats from the unfiltered data
+  const stats = useMemo(() => computeStats(allTransactions ?? []), [allTransactions]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -66,7 +143,7 @@ export function TransactionsPage() {
               notes: txToDelete.notes || '',
             });
             showToast('Transaction restored', 'success');
-          } catch (err) {
+          } catch {
             showToast('Failed to restore transaction', 'error');
           }
         }
@@ -78,7 +155,7 @@ export function TransactionsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <PageHeader
         title="Transactions"
         subtitle="All your income, expenses, and adjustments"
@@ -90,6 +167,39 @@ export function TransactionsPage() {
         }
       />
 
+      {/* ── Summary Stats ─────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
+        <SummaryCard
+          label="Today's Expenses"
+          amount={stats.todayExpense}
+          icon={TrendingDown}
+          accent="rose"
+          sub="Outgoing today"
+        />
+        <SummaryCard
+          label="Today's Income"
+          amount={stats.todayIncome}
+          icon={TrendingUp}
+          accent="emerald"
+          sub="Incoming today"
+        />
+        <SummaryCard
+          label="Month Expenses"
+          amount={stats.monthExpense}
+          icon={CalendarDays}
+          accent="rose"
+          sub="Outgoing this month"
+        />
+        <SummaryCard
+          label="Month Income"
+          amount={stats.monthIncome}
+          icon={CalendarClock}
+          accent="emerald"
+          sub="Incoming this month"
+        />
+      </div>
+
+      {/* ── Search + Filter bar ─────────────────────────────── */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -177,6 +287,7 @@ export function TransactionsPage() {
         </motion.div>
       )}
 
+      {/* ── Transaction List ───────────────────────────────── */}
       {isLoading ? (
         <SkeletonList count={6} />
       ) : isError ? (
@@ -190,65 +301,114 @@ export function TransactionsPage() {
         />
       ) : (
         <div className="space-y-5">
-          {Object.entries(grouped).map(([date, items]) => (
-            <div key={date}>
-              <div className="mb-2 flex items-center justify-between px-1">
-                <p className="text-sm font-semibold text-slate-500">{formatDate(date)}</p>
-                <p className="text-xs text-slate-400">{items.length} {items.length === 1 ? 'item' : 'items'}</p>
-              </div>
-              <div className="card divide-y divide-slate-100">
-                {items.map((tx) => (
-                  <motion.div
-                    key={tx.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="group flex items-center gap-3 p-3.5 transition hover:bg-slate-50"
-                  >
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
-                      style={{ backgroundColor: tx.account?.color || '#6366f1' }}
-                    >
-                      <AccountIcon icon={tx.account?.icon || 'wallet'} className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{tx.description || tx.category?.name || tx.type}</p>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                        <span>{tx.account?.name}</span>
-                        {tx.category && (<><span>·</span><span>{tx.category.name}</span></>)}
-                        <span>·</span>
-                        <span>{formatTime(tx.time)}</span>
-                      </div>
-                      {tx.tags.length > 0 && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {tx.tags.map((t) => <span key={t} className="badge bg-slate-100 text-slate-600">{t}</span>)}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'text-sm font-bold tabular-nums',
-                        tx.type === 'income' ? 'text-emerald-600' : tx.type === 'expense' ? 'text-rose-600' : 'text-indigo-600'
-                      )}>
-                        {tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '±'}{formatCurrency(Number(tx.amount))}
+          {Object.entries(grouped).map(([date, items]) => {
+            // compute per-day total expense
+            const dayExpense = items.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+            const dayIncome  = items.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+
+            return (
+              <div key={date}>
+                {/* Date header with daily totals */}
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">{formatDate(date)}</p>
+                    <span className="text-[10px] font-medium text-slate-400">{items.length} {items.length === 1 ? 'item' : 'items'}</span>
+                  </div>
+
+                  <div className="flex items-center gap-2 text-xs font-semibold">
+                    {dayExpense > 0 && (
+                      <span className="flex items-center gap-1 rounded-lg bg-rose-50 px-2 py-0.5 text-rose-600 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-100 dark:border-rose-900/40">
+                        <ArrowDownCircle className="h-3 w-3" />
+                        -{formatCurrency(dayExpense)}
                       </span>
-                      <button
-                        onClick={() => setEditTransaction(tx)}
-                        className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-slate-100 hover:text-indigo-600 group-hover:opacity-100"
+                    )}
+                    {dayIncome > 0 && (
+                      <span className="flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-0.5 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
+                        <ArrowUpCircle className="h-3 w-3" />
+                        +{formatCurrency(dayIncome)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Transaction rows */}
+                <div className="card divide-y divide-slate-100 dark:divide-slate-800/60">
+                  {items.map((tx) => (
+                    <motion.div
+                      key={tx.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="group flex items-center gap-3 p-3 sm:p-3.5 transition hover:bg-slate-50 dark:hover:bg-slate-800/30"
+                    >
+                      {/* Account colour icon */}
+                      <div
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white shadow-sm"
+                        style={{ backgroundColor: tx.account?.color || '#6366f1' }}
                       >
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteId(tx.id)}
-                        className="rounded-lg p-1.5 text-slate-300 opacity-0 transition hover:bg-error-50 hover:text-error-600 group-hover:opacity-100"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </motion.div>
-                ))}
+                        <AccountIcon icon={tx.account?.icon || 'wallet'} className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </div>
+
+                      {/* Description + meta */}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100 leading-snug">
+                          {tx.description || tx.category?.name || tx.type}
+                        </p>
+                        {/* Single row of meta — wraps gracefully on mobile */}
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-slate-400 leading-tight mt-0.5">
+                          {tx.account?.name && <span className="truncate max-w-[90px]">{tx.account.name}</span>}
+                          {tx.category && (
+                            <>
+                              <span className="text-slate-300">·</span>
+                              <span className="truncate max-w-[80px]">{tx.category.name}</span>
+                            </>
+                          )}
+                          <span className="text-slate-300">·</span>
+                          <span className="whitespace-nowrap">{formatTime(tx.time)}</span>
+                        </div>
+                        {tx.tags.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {tx.tags.map((t) => (
+                              <span key={t} className="badge bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[9px] px-1.5 py-0.5 rounded-md">{t}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Amount + actions — kept together, no wrap */}
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span className={cn(
+                          'text-sm font-bold tabular-nums whitespace-nowrap',
+                          tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400'
+                          : tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400'
+                          : 'text-indigo-600 dark:text-indigo-400',
+                        )}>
+                          {tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '±'}{formatCurrency(Number(tx.amount))}
+                        </span>
+
+                        {/* Edit/Delete — visible on hover (desktop) or always small on mobile */}
+                        <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 sm:transition">
+                          <button
+                            onClick={() => setEditTransaction(tx)}
+                            className="rounded-lg p-1.5 text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 transition"
+                            title="Edit"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteId(tx.id)}
+                            className="rounded-lg p-1.5 text-slate-300 hover:bg-error-50 dark:hover:bg-rose-950/30 hover:text-error-600 transition"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
