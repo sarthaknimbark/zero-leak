@@ -73,6 +73,15 @@ export function usePushNotifications() {
         body: JSON.stringify({ push_subscription: subscription.toJSON() }),
       });
       setIsSubscribed(true);
+
+      try {
+        await api('/api/notifications/test', { method: 'POST' });
+      } catch {
+        await activeRegistration.showNotification('Zero Leak', {
+          body: 'Device alerts are on. Due bills will show up here.',
+          icon: '/favicon.svg',
+        });
+      }
       return true;
     } catch (e) {
       console.error('Failed to subscribe user to push notifications:', e);

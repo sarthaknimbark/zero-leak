@@ -42,6 +42,18 @@ type ProfileRow = {
  * - clear invalid push_subscription
  * Does not modify accounts, transactions, or bill payment status.
  */
+export async function sendTestPush(subscription: webpush.PushSubscription) {
+  ensureVapid();
+  await webpush.sendNotification(
+    subscription,
+    JSON.stringify({
+      title: 'Zero Leak',
+      body: 'Device alerts are on. Due bills will show up here.',
+      url: '/bills',
+    })
+  );
+}
+
 export async function checkAndSendReminders(): Promise<ReminderResult> {
   ensureVapid();
 

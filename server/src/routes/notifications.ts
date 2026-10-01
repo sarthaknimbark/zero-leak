@@ -4,6 +4,7 @@ import { createUserClient } from '../lib/supabase.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
+import { sendTestPush } from '../jobs/sendReminders.js';
 
 export const notificationsRouter = Router();
 
@@ -78,6 +79,33 @@ async function syncDueBillNotices(sb: SupabaseClient, userId: string, existing: 
 
   return merged;
 }
+
+notificationsRouter.post(
+  '/test',
+  asyncHandler(async (req, res) => {
+    const sb = createUserClient(req.accessToken!);
+    const { data, error } = await sb
+      .from('profiles')
+      .select('push_subscription')
+      .eq('id', req.user!.id)
+      .maybeSingle();
+
+    if (error) throw new AppError(400, error.message);
+    const subscription = data?.push_subscription;
+    if (!subscription || typeof subscription !== 'object') {
+      throw new AppError(400, 'Turn on bill reminders first');
+    }
+
+    try {
+      await sendTestPush(subscription as Parameters<typeof sendTestPush>[0]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not deliver the test alert';
+      throw new AppError(400, message);
+    }
+
+    res.json({ ok: true });
+  })
+);
 
 notificationsRouter.get(
   '/',
