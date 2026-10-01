@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Wallet, Landmark, PiggyBank, TrendingUp, TrendingDown,
   ArrowLeftRight, ArrowRight, Plus, Banknote, LineChart, PieChart,
-  ArrowDownCircle, ArrowUpCircle,
+  ArrowDownCircle, ArrowUpCircle, Eye, EyeOff,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart as RPieChart, Pie, Cell, BarChart, Bar, CartesianGrid,
@@ -17,10 +17,21 @@ import { PageSpinner } from '@/components/ui/Skeleton';
 import { QueryError } from '@/components/ui/QueryError';
 
 const CHART_COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#8b5cf6', '#ec4899', '#14b8a6'];
+const BALANCE_HIDDEN_KEY = 'zl_hide_balance';
+const HIDDEN_AMOUNT = '••••••';
 
 export function DashboardPage() {
   const { data: dash, isPending, isError, error, refetch } = useDashboard();
   const { data: accounts } = useAccounts();
+  const [balanceHidden, setBalanceHidden] = useState(() => localStorage.getItem(BALANCE_HIDDEN_KEY) === '1');
+
+  const toggleBalanceHidden = () => {
+    setBalanceHidden((prev) => {
+      const next = !prev;
+      localStorage.setItem(BALANCE_HIDDEN_KEY, next ? '1' : '0');
+      return next;
+    });
+  };
 
   const cashFlowData = useMemo(() => {
     if (!dash) return [];
@@ -115,18 +126,30 @@ export function DashboardPage() {
             <div className="absolute right-6 top-14 h-7 w-10 rounded-lg bg-gradient-to-br from-amber-300/80 to-amber-500/50 opacity-40 shadow-sm border border-amber-300/30" />
             
             <div className="relative">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Total Balance</p>
-                <span className="badge bg-white/10 text-white/90 backdrop-blur-md px-3 py-1 font-semibold text-[10px] uppercase tracking-wider mr-12">All Accounts</span>
+                <div className="flex items-center gap-2">
+                  <span className="badge bg-white/10 text-white/90 backdrop-blur-md px-3 py-1 font-semibold text-[10px] uppercase tracking-wider">All Accounts</span>
+                  <button
+                    type="button"
+                    onClick={toggleBalanceHidden}
+                    aria-pressed={balanceHidden}
+                    aria-label={balanceHidden ? 'Show amounts' : 'Hide amounts'}
+                    title={balanceHidden ? 'Show amounts' : 'Hide amounts'}
+                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur-md transition hover:bg-white/20"
+                  >
+                    {balanceHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
               <p className="mt-2.5 text-3xl sm:text-4xl font-embossed tracking-widest text-slate-100 tabular-nums">
-                {formatCurrency(dash.totalBalance)}
+                {balanceHidden ? HIDDEN_AMOUNT : formatCurrency(dash.totalBalance)}
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-white/5 pt-3">
-                <BalanceStat label="Cash" value={dash.cashBalance} icon={<Banknote className="h-4 w-4" />} />
-                <BalanceStat label="Banks" value={dash.bankBalance} icon={<Landmark className="h-4 w-4" />} />
-                <BalanceStat label="Wallets" value={dash.walletBalance} icon={<Wallet className="h-4 w-4" />} />
-                <BalanceStat label="Investments" value={dash.investmentBalance} icon={<TrendingUp className="h-4 w-4" />} />
+                <BalanceStat label="Cash" value={dash.cashBalance} hidden={balanceHidden} icon={<Banknote className="h-4 w-4" />} />
+                <BalanceStat label="Banks" value={dash.bankBalance} hidden={balanceHidden} icon={<Landmark className="h-4 w-4" />} />
+                <BalanceStat label="Wallets" value={dash.walletBalance} hidden={balanceHidden} icon={<Wallet className="h-4 w-4" />} />
+                <BalanceStat label="Investments" value={dash.investmentBalance} hidden={balanceHidden} icon={<TrendingUp className="h-4 w-4" />} />
               </div>
             </div>
           </motion.div>
@@ -316,7 +339,7 @@ export function DashboardPage() {
   );
 }
 
-function BalanceStat({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function BalanceStat({ label, value, icon, hidden }: { label: string; value: number; icon: React.ReactNode; hidden?: boolean }) {
   return (
     <div>
       <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-300">
@@ -324,7 +347,7 @@ function BalanceStat({ label, value, icon }: { label: string; value: number; ico
         {label}
       </div>
       <p className="text-lg sm:text-[19px] font-embossed tracking-wide text-slate-100 tabular-nums">
-        {formatCurrency(value)}
+        {hidden ? HIDDEN_AMOUNT : formatCurrency(value)}
       </p>
     </div>
   );
