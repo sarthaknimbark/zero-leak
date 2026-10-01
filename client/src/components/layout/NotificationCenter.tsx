@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Check, Trash2, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Bell, Check, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { api } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -17,35 +18,50 @@ interface AppNotification {
 export function NotificationCenter() {
   const { profile } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isOpen, setIsOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<{ top: number; right: number }>({ top: 56, right: 12 });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  const placePanel = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setPanelStyle({
+      top: rect.bottom + 8,
+      right: Math.max(12, window.innerWidth - rect.right),
+    });
+  };
 
   useEffect(() => {
     if (!profile) return;
-    fetchNotifications();
+    void fetchNotifications();
+    const timer = window.setInterval(() => {
+      void fetchNotifications();
+    }, 60_000);
 
-    // Setup realtime subscription for notifications
     const channel = supabase
-      .channel('notifications_changes')
+      .channel(`notifications_${profile.id}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` },
         () => {
-          fetchNotifications();
+          void fetchNotifications();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
     };
   }, [profile]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
+      const target = event.target as Node;
+      if (buttonRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setIsOpen(false);
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -56,8 +72,10 @@ export function NotificationCenter() {
     try {
       const data = await api<AppNotification[]>('/api/notifications');
       setNotifications(data);
+      setLoadError(null);
     } catch (e) {
       console.error(e);
+      setLoadError(e instanceof Error ? e.message : 'Could not load notifications');
     }
   };
 
@@ -81,24 +99,34 @@ export function NotificationCenter() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative">
       {/* Bell Trigger Icon */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="relative p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-650 dark:text-slate-350 transition active:scale-95"
+        ref={buttonRef}
+        onClick={() => {
+          placePanel();
+          setIsOpen((open) => !open);
+        }}
+        className="relative rounded-xl p-2.5 text-slate-600 transition hover:bg-slate-100 active:scale-95 dark:text-slate-300 dark:hover:bg-slate-800"
         title="Notifications"
+        aria-expanded={isOpen}
+        aria-label="Notifications"
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-indigo-600 text-[9px] font-bold text-white ring-2 ring-white dark:ring-slate-900 animate-pulse">
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-bold text-white ring-2 ring-white dark:ring-slate-900">
             {unreadCount}
           </span>
         )}
       </button>
 
-      {/* Notifications Dropdown Panel */}
-      {isOpen && (
-        <div className="absolute right-0 mt-2.5 w-80 sm:w-96 rounded-2xl border border-slate-100 dark:border-slate-800/80 bg-white dark:bg-slate-900 p-4 shadow-xl z-55 max-h-[480px] flex flex-col">
+      {isOpen &&
+        createPortal(
+        <div
+          ref={dropdownRef}
+          style={{ top: panelStyle.top, right: panelStyle.right }}
+          className="fixed z-[80] flex max-h-[480px] w-[min(24rem,calc(100vw-1.5rem))] flex-col rounded-2xl border border-slate-100 bg-white p-4 shadow-xl dark:border-slate-800/80 dark:bg-slate-900"
+        >
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/60 pb-3 mb-2 shrink-0">
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-slate-900 dark:text-slate-100">Notifications</span>
@@ -121,6 +149,11 @@ export function NotificationCenter() {
 
           {/* List content */}
           <div className="flex-1 overflow-y-auto space-y-2.5 pr-0.5">
+            {loadError && (
+              <p className="mb-2 rounded-lg bg-rose-50 px-2 py-1.5 text-[11px] text-rose-600 dark:bg-rose-950/30 dark:text-rose-300">
+                {loadError}
+              </p>
+            )}
             {notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <div className="p-3 bg-slate-50 dark:bg-slate-950/20 text-slate-400 rounded-full mb-3">
@@ -169,8 +202,9 @@ export function NotificationCenter() {
               ))
             )}
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 }

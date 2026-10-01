@@ -338,12 +338,16 @@ export function ProfilePage() {
   };
 
   const handlePushToggle = async () => {
-    if (isSubscribed) {
-      const ok = await unsubscribeUser();
-      showToast(ok ? 'Notifications disabled' : 'Could not disable notifications', ok ? 'success' : 'error');
-    } else {
-      const ok = await subscribeUser();
-      showToast(ok ? 'Bill reminders enabled' : 'Could not enable notifications', ok ? 'success' : 'error');
+    try {
+      if (isSubscribed) {
+        const ok = await unsubscribeUser();
+        showToast(ok ? 'Notifications disabled' : 'Could not disable notifications', ok ? 'success' : 'error');
+      } else {
+        await subscribeUser();
+        showToast('Bill reminders enabled', 'success');
+      }
+    } catch (err) {
+      showToast((err as Error).message || 'Could not enable notifications', 'error');
     }
   };
 

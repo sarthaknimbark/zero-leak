@@ -97,6 +97,31 @@ export async function checkAndSendReminders(): Promise<ReminderResult> {
 
   for (const bill of activeDueBills) {
     const profile = profileRows.find((p) => p.id === bill.user_id);
+    const title = 'Bill Reminder';
+    const body = `Your "${bill.name}" bill of ₹${bill.amount} is unpaid.`;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: existingNotice } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', bill.user_id)
+      .eq('title', title)
+      .gte('created_at', `${today}T00:00:00.000Z`)
+      .limit(1);
+
+    if (!existingNotice?.length) {
+      const { error: noticeError } = await supabase.from('notifications').insert({
+        user_id: bill.user_id,
+        title,
+        body,
+        type: 'bill',
+        read: false,
+      });
+      if (noticeError) {
+        console.error('Could not save in-app notification:', noticeError.message);
+      }
+    }
+
     if (!profile?.push_subscription) {
       result.skippedNoSubscription += 1;
       console.log(`User for bill "${bill.name}" has no push subscription.`);
@@ -105,7 +130,7 @@ export async function checkAndSendReminders(): Promise<ReminderResult> {
 
     const payload = JSON.stringify({
       title: 'Zero Leak — Bill Reminder',
-      body: `Your "${bill.name}" bill of ₹${bill.amount} is unpaid! Mark it as paid to stop reminders.`,
+      body: `${body} Mark it as paid to stop reminders.`,
       url: '/bills',
     });
 
@@ -114,14 +139,6 @@ export async function checkAndSendReminders(): Promise<ReminderResult> {
     try {
       await webpush.sendNotification(profile.push_subscription, payload);
       result.sent += 1;
-
-      await supabase.from('notifications').insert({
-        user_id: bill.user_id,
-        title: 'Bill Reminder 🚨',
-        body: `Your "${bill.name}" bill of ₹${bill.amount} is unpaid!`,
-        type: 'bill',
-        read: false,
-      });
     } catch (err) {
       result.failed += 1;
       const statusCode =

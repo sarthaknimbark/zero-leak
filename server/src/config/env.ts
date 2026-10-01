@@ -70,9 +70,16 @@ export function requireVapidConfig() {
       'VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are required to send push reminders.'
     );
   }
+  const cleaned = env.vapidSubject.replace(/[<>\s]/g, '');
+  const subject = cleaned.startsWith('mailto:')
+    ? cleaned
+    : cleaned.includes('@')
+      ? `mailto:${cleaned}`
+      : 'mailto:support@zeroleak.app';
+
   return {
     publicKey: env.vapidPublicKey,
     privateKey: env.vapidPrivateKey,
-    subject: env.vapidSubject,
+    subject,
   };
 }

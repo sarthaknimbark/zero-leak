@@ -33,7 +33,8 @@ export function usePushNotifications() {
 
   const checkSubscription = async () => {
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await navigator.serviceWorker.getRegistration();
+      if (!registration) return;
       const sub = await registration.pushManager.getSubscription();
       setIsSubscribed(!!sub);
     } catch (e) {
@@ -42,17 +43,27 @@ export function usePushNotifications() {
   };
 
   const subscribeUser = async () => {
-    if (!isSupported || !profile) return false;
+    if (!isSupported || !profile) {
+      throw new Error('Notifications are not supported in this browser');
+    }
     setLoading(true);
     try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      const ready = await Promise.race([
+        navigator.serviceWorker.ready,
+        new Promise<ServiceWorkerRegistration>((_, reject) => {
+          window.setTimeout(() => reject(new Error('Notification service did not start. Refresh and try again.')), 8000);
+        }),
+      ]);
+      const activeRegistration = ready || registration;
+
       const result = await Notification.requestPermission();
       setPermission(result);
       if (result !== 'granted') {
-        throw new Error('Permission not granted for notifications');
+        throw new Error('Allow notifications in the browser prompt to turn this on');
       }
 
-      const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.subscribe({
+      const subscription = await activeRegistration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       });
@@ -65,7 +76,7 @@ export function usePushNotifications() {
       return true;
     } catch (e) {
       console.error('Failed to subscribe user to push notifications:', e);
-      return false;
+      throw e instanceof Error ? e : new Error('Could not enable notifications');
     } finally {
       setLoading(false);
     }
@@ -75,7 +86,7 @@ export function usePushNotifications() {
     if (!isSupported || !profile) return false;
     setLoading(true);
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.ready);
       const subscription = await registration.pushManager.getSubscription();
       if (subscription) {
         await subscription.unsubscribe();

@@ -17,6 +17,7 @@ import { debtsRouter } from './routes/debts.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { adminRouter } from './routes/admin.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { checkAndSendReminders } from './jobs/sendReminders.js';
 
 const app = express();
 
@@ -50,6 +51,14 @@ async function start() {
     void checkDatabaseConnection().then((status) => {
       printStartupBanner(status, env.port);
     });
+
+    const runReminders = () => {
+      void checkAndSendReminders().catch((err) => {
+        console.error('Reminder run failed:', err instanceof Error ? err.message : err);
+      });
+    };
+    setTimeout(runReminders, 8_000);
+    setInterval(runReminders, 15 * 60 * 1000);
   });
 }
 

@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  Wallet, Landmark, PiggyBank, TrendingUp, TrendingDown,
-  ArrowLeftRight, ArrowRight, Plus, Banknote, LineChart, PieChart,
+  Wallet, PiggyBank, TrendingUp, TrendingDown,
+  ArrowLeftRight, ArrowRight, Plus, PieChart,
   ArrowDownCircle, ArrowUpCircle, Eye, EyeOff,
 } from 'lucide-react';
 import {
@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useAuth } from '@/context/AuthContext';
 import { formatCurrency, formatCompact, formatDate } from '@/lib/format';
 import { AccountIcon } from '@/components/accounts/AccountIcon';
 import { PageSpinner } from '@/components/ui/Skeleton';
@@ -23,6 +24,7 @@ const HIDDEN_AMOUNT = '••••••';
 export function DashboardPage() {
   const { data: dash, isPending, isError, error, refetch } = useDashboard();
   const { data: accounts } = useAccounts();
+  const { profile } = useAuth();
   const [balanceHidden, setBalanceHidden] = useState(() => localStorage.getItem(BALANCE_HIDDEN_KEY) === '1');
 
   const toggleBalanceHidden = () => {
@@ -111,45 +113,60 @@ export function DashboardPage() {
         </motion.div>
       ) : (
         <>
-          {/* Balance hero - frosted credit card */}
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 p-5 text-white shadow-xl border border-white/10"
+            className="relative overflow-hidden rounded-[1.4rem] border border-white/15 bg-gradient-to-br from-[#0b1224] via-[#1a1740] to-[#312e81] p-5 text-white shadow-2xl sm:p-6"
           >
-            {/* Glossy overlay sheen */}
-            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent pointer-events-none" />
-            <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-indigo-500/20 blur-xl" />
-            <div className="absolute -right-24 top-12 h-40 w-40 rounded-full bg-indigo-500/10 blur-xl" />
-            
-            {/* Credit card chip graphic - positioned on the right side */}
-            <div className="absolute right-6 top-14 h-7 w-10 rounded-lg bg-gradient-to-br from-amber-300/80 to-amber-500/50 opacity-40 shadow-sm border border-amber-300/30" />
-            
-            <div className="relative">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-300">Total Balance</p>
-                <div className="flex items-center gap-2">
-                  <span className="badge bg-white/10 text-white/90 backdrop-blur-md px-3 py-1 font-semibold text-[10px] uppercase tracking-wider">All Accounts</span>
-                  <button
-                    type="button"
-                    onClick={toggleBalanceHidden}
-                    aria-pressed={balanceHidden}
-                    aria-label={balanceHidden ? 'Show amounts' : 'Hide amounts'}
-                    title={balanceHidden ? 'Show amounts' : 'Hide amounts'}
-                    className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/90 backdrop-blur-md transition hover:bg-white/20"
-                  >
-                    {balanceHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
-                </div>
+            <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,transparent_28%,rgba(255,255,255,0.10)_46%,transparent_62%)]" />
+            <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full bg-indigo-400/20 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-20 left-10 h-36 w-36 rounded-full bg-cyan-400/10 blur-3xl" />
+
+            <div className="relative flex items-start justify-between gap-3">
+              <div>
+                <p className="font-display text-sm font-bold tracking-[0.28em]">ZERO LEAK</p>
+                <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.22em] text-white/45">All accounts</p>
               </div>
-              <p className="mt-2.5 text-3xl sm:text-4xl font-embossed tracking-widest text-slate-100 tabular-nums">
-                {balanceHidden ? HIDDEN_AMOUNT : formatCurrency(dash.totalBalance)}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4 border-t border-white/5 pt-3">
-                <BalanceStat label="Cash" value={dash.cashBalance} hidden={balanceHidden} icon={<Banknote className="h-4 w-4" />} />
-                <BalanceStat label="Banks" value={dash.bankBalance} hidden={balanceHidden} icon={<Landmark className="h-4 w-4" />} />
-                <BalanceStat label="Wallets" value={dash.walletBalance} hidden={balanceHidden} icon={<Wallet className="h-4 w-4" />} />
-                <BalanceStat label="Investments" value={dash.investmentBalance} hidden={balanceHidden} icon={<TrendingUp className="h-4 w-4" />} />
+              <button
+                type="button"
+                onClick={toggleBalanceHidden}
+                aria-pressed={balanceHidden}
+                aria-label={balanceHidden ? 'Show amounts' : 'Hide amounts'}
+                title={balanceHidden ? 'Show amounts' : 'Hide amounts'}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white/90 ring-1 ring-white/15 transition hover:bg-white/20"
+              >
+                {balanceHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            <div className="relative mt-5 flex items-center gap-3">
+              <CardChip />
+              <ContactlessMark />
+            </div>
+
+            <p className="relative mt-5 text-[10px] font-semibold uppercase tracking-[0.22em] text-white/50">Available balance</p>
+            <p className="relative mt-1 font-embossed text-3xl tracking-[0.08em] text-slate-50 tabular-nums sm:text-4xl">
+              {balanceHidden ? HIDDEN_AMOUNT : formatCurrency(dash.totalBalance)}
+            </p>
+
+            <div className="relative mt-5 rounded-2xl border border-white/20 bg-white/10 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] backdrop-blur-md sm:p-4">
+              <div className="grid grid-cols-4 gap-2">
+                <BalanceStat label="Cash" value={dash.cashBalance} hidden={balanceHidden} />
+                <BalanceStat label="Banks" value={dash.bankBalance} hidden={balanceHidden} />
+                <BalanceStat label="Wallets" value={dash.walletBalance} hidden={balanceHidden} />
+                <BalanceStat label="Invest" value={dash.investmentBalance} hidden={balanceHidden} />
+              </div>
+
+              <div className="mt-3 flex items-end justify-between gap-3 border-t border-white/15 pt-3">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.18em] text-white/55">Cardholder</p>
+                  <p className="truncate text-sm font-semibold uppercase tracking-[0.14em] sm:text-base">
+                    {profile?.full_name || 'Zero Leak'}
+                  </p>
+                </div>
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15 text-[11px] font-bold tracking-tight ring-1 ring-white/25 backdrop-blur-sm">
+                  ZL
+                </div>
               </div>
             </div>
           </motion.div>
@@ -339,17 +356,36 @@ export function DashboardPage() {
   );
 }
 
-function BalanceStat({ label, value, icon, hidden }: { label: string; value: number; icon: React.ReactNode; hidden?: boolean }) {
+function BalanceStat({ label, value, hidden }: { label: string; value: number; hidden?: boolean }) {
   return (
-    <div>
-      <div className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-300">
-        {icon}
-        {label}
-      </div>
-      <p className="text-lg sm:text-[19px] font-embossed tracking-wide text-slate-100 tabular-nums">
-        {hidden ? HIDDEN_AMOUNT : formatCurrency(value)}
+    <div className="min-w-0">
+      <p className="truncate text-[10px] font-medium uppercase tracking-[0.14em] text-white/60">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold tabular-nums text-white sm:text-base">
+        {hidden ? '••••' : formatCurrency(value)}
       </p>
     </div>
+  );
+}
+
+function CardChip() {
+  return (
+    <div className="relative h-8 w-11 overflow-hidden rounded-[5px] bg-gradient-to-br from-[#f8e7a0] via-[#e0b43a] to-[#a16207] shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+      <div className="absolute inset-[3px] grid grid-cols-3 grid-rows-2 gap-[2px]">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <span key={i} className="rounded-[1px] border border-amber-900/35 bg-amber-100/15" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ContactlessMark() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-6 w-6 text-white/70" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
+      <path d="M7.5 8.2c2.2 2 2.2 5.6 0 7.6" />
+      <path d="M11.2 5.6c3.6 3.2 3.6 9.6 0 12.8" />
+      <path d="M14.8 3.2c5 4.6 5 13 0 17.6" />
+    </svg>
   );
 }
 

@@ -7,12 +7,11 @@ import { wakeApi } from './lib/api';
 // Warm the API as early as possible (before React mounts).
 void wakeApi();
 
-// Register service worker after first paint so it never blocks boot.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    window.setTimeout(() => {
-      navigator.serviceWorker.register('/sw.js').catch(() => undefined);
-    }, 1500);
+    void navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.error('Service worker registration failed:', err);
+    });
   });
 }
 
