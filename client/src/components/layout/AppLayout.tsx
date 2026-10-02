@@ -12,7 +12,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { NotificationCenter } from './NotificationCenter';
 import { initials } from '@/lib/format';
 import { cn } from '@/lib/cn';
-import { PageSpinner } from '@/components/ui/Skeleton';
 
 interface NavItem {
   to: string;
@@ -45,12 +44,6 @@ const fabActions = [
   { label: 'Add Account', icon: PiggyBank, path: '/accounts?action=new' },
 ];
 
-const pageTransition = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -4 },
-};
-
 export function AppLayout() {
   const { profile, signOut } = useAuth();
   const location = useLocation();
@@ -59,7 +52,7 @@ export function AppLayout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'auto' });
     setFabOpen(false);
   }, [location.pathname]);
 
@@ -71,10 +64,6 @@ export function AppLayout() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [drawerOpen]);
-
-  if (!profile) {
-    return <PageSpinner />;
-  }
 
   return (
     <div className="app-shell-bg min-h-dvh transition-colors duration-300">
@@ -148,18 +137,7 @@ export function AppLayout() {
               <ChevronLeft className="h-4 w-4" /> Back
             </button>
           )}
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              variants={pageTransition}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
-            >
-              <Outlet />
-            </motion.div>
-          </AnimatePresence>
+          <Outlet />
         </main>
       </div>
 

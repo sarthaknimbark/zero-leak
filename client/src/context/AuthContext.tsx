@@ -6,6 +6,23 @@ import type { Profile } from '@/lib/types';
 
 const PROFILE_CACHE_KEY = 'zl_profile_cache_v1';
 
+function readStoredSession(): Session | null {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith('sb-') || !key.endsWith('-auth-token')) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as Session & { currentSession?: Session };
+      const session = parsed.currentSession ?? parsed;
+      if (session?.access_token && session.user?.id) return session;
+    }
+  } catch {
+    /* ignore broken storage */
+  }
+  return null;
+}
+
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
@@ -48,10 +65,14 @@ function clearCachedProfile() {
   }
 }
 
+const storedSession = readStoredSession();
+if (storedSession?.access_token) setApiAccessToken(storedSession.access_token);
+const storedProfile = storedSession?.user?.id ? readCachedProfile(storedSession.user.id) : null;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(storedSession);
+  const [profile, setProfile] = useState<Profile | null>(storedProfile);
+  const [loading, setLoading] = useState(!storedSession);
   const [profileError, setProfileError] = useState<string | null>(null);
   const profileLoadId = useRef(0);
   const readyRef = useRef(false);

@@ -10,8 +10,9 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { AuthPage } from '@/pages/AuthPage';
 import { PageSpinner } from '@/components/ui/Skeleton';
 import { PinLock } from '@/components/security/PinLock';
-import { DashboardPage } from '@/pages/DashboardPage';
 
+const dashboardModule = import('@/pages/DashboardPage');
+const DashboardPage = lazy(() => dashboardModule.then((m) => ({ default: m.DashboardPage })));
 const AccountsPage = lazy(() => import('@/pages/AccountsPage').then((m) => ({ default: m.AccountsPage })));
 const TransactionsPage = lazy(() => import('@/pages/TransactionsPage').then((m) => ({ default: m.TransactionsPage })));
 const TransfersPage = lazy(() => import('@/pages/TransfersPage').then((m) => ({ default: m.TransfersPage })));
@@ -53,7 +54,7 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<Suspense fallback={<PageSpinner />}><DashboardPage /></Suspense>} />
         <Route path="accounts" element={<Suspense fallback={<PageSpinner />}><AccountsPage /></Suspense>} />
         <Route path="transactions" element={<Suspense fallback={<PageSpinner />}><TransactionsPage /></Suspense>} />
         <Route path="transfers" element={<Suspense fallback={<PageSpinner />}><TransfersPage /></Suspense>} />

@@ -19,12 +19,40 @@ interface DashboardData {
   netWorth: number;
 }
 
+function dashboardCacheKey(userId: string) {
+  return `zl_dash_${userId}`;
+}
+
+function readDashboardCache(userId: string): DashboardData | undefined {
+  try {
+    const raw = sessionStorage.getItem(dashboardCacheKey(userId));
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as DashboardData;
+    if (!parsed || !Array.isArray(parsed.accounts) || !Array.isArray(parsed.transactions)) return undefined;
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
 export function useDashboard() {
   const { session } = useAuth();
+  const userId = session?.user?.id;
   return useQuery({
     queryKey: queryKeys.dashboard,
-    queryFn: () => api<DashboardData>('/api/dashboard'),
+    queryFn: async () => {
+      const data = await api<DashboardData>('/api/dashboard');
+      if (userId) {
+        try {
+          sessionStorage.setItem(dashboardCacheKey(userId), JSON.stringify(data));
+        } catch {
+          /* ignore quota */
+        }
+      }
+      return data;
+    },
     enabled: !!session?.access_token,
+    placeholderData: () => (userId ? readDashboardCache(userId) : undefined),
   });
 }
 
