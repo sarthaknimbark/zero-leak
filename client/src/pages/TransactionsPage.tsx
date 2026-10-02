@@ -104,6 +104,7 @@ export function TransactionsPage() {
 
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
+      setEditTransaction(null);
       setModalOpen(true);
       setSearchParams({});
     }
@@ -161,7 +162,7 @@ export function TransactionsPage() {
         subtitle="All your income, expenses, and adjustments"
         icon={TrendingUp}
         action={
-          <button onClick={() => setModalOpen(true)} className="btn-primary">
+          <button onClick={() => { setEditTransaction(null); setModalOpen(true); }} className="btn-primary">
             <Plus className="h-4 w-4" /> <span className="hidden sm:inline">Add</span>
           </button>
         }

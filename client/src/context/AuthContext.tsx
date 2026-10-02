@@ -161,16 +161,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiAccessToken(session?.access_token ?? null);
   }, [session]);
 
-  useEffect(() => {
-    if (profile?.pin_enabled) {
-      const storedPin = localStorage.getItem('security_pin');
-      if (!storedPin) {
-        console.warn('Security alert: PIN is enabled in database but missing from local storage! Signing out.');
-        void signOut();
-      }
-    }
-  }, [profile]);
-
   const signUp = async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
       email,

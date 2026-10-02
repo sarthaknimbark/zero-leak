@@ -24,7 +24,15 @@ const schema = z.object({
 
 type FormData = z.infer<typeof schema>;
 
-export function TransactionFormModal({ open, onClose, transaction }: { open: boolean; onClose: () => void; transaction?: Transaction | null }) {
+export function TransactionFormModal({
+  open,
+  onClose,
+  transaction,
+}: {
+  open: boolean;
+  onClose: () => void;
+  transaction?: Transaction | null;
+}) {
   const { data: accounts } = useActiveAccounts();
   const { data: allCategories } = useCategories();
   const createTx = useCreateTransaction();

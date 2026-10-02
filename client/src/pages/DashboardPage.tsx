@@ -12,6 +12,7 @@ import {
 import { useDashboard } from '@/hooks/useDashboard';
 import { useAccounts } from '@/hooks/useAccounts';
 import { useAuth } from '@/context/AuthContext';
+import { DailyExpenseChips } from '@/components/dashboard/DailyExpenseChips';
 import { formatCurrency, formatCompact, formatDate } from '@/lib/format';
 import { AccountIcon } from '@/components/accounts/AccountIcon';
 import { PageSpinner } from '@/components/ui/Skeleton';
@@ -170,6 +171,8 @@ export function DashboardPage() {
               </div>
             </div>
           </motion.div>
+
+          <DailyExpenseChips />
 
           {/* Quick actions */}
           <div className="grid grid-cols-3 gap-3">
