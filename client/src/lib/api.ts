@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '');
+const rawApiUrl = (import.meta.env.VITE_API_URL as string | undefined)?.trim();
+const API_BASE = (rawApiUrl ? rawApiUrl.split(',')[0].trim() : '')?.replace(/\/$/, '');
 
 if (!API_BASE) {
   throw new Error(

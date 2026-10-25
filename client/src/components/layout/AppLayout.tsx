@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Wallet, ArrowLeftRight, TrendingUp, Search,
   Tags, Download, Settings, LogOut, Plus, Menu, X,
   PiggyBank, ArrowDownCircle, ArrowRightLeft, Gift,
-  Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users, Grid2X2,
+  Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users, Grid2X2, FileUp,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -29,6 +29,7 @@ const mainNav: NavItem[] = [
 ];
 
 const moreNav: NavItem[] = [
+  { to: '/import', label: 'Import Statement', icon: FileUp },
   { to: '/bills', label: 'Bills & Reminders', icon: CalendarDays },
   { to: '/debts', label: 'Debt Tracker', icon: Users },
   { to: '/leaks', label: 'Leak Detector', icon: ShieldAlert },

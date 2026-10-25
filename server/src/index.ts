@@ -17,6 +17,7 @@ import { debtsRouter } from './routes/debts.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { adminRouter } from './routes/admin.js';
 import { dashboardRouter } from './routes/dashboard.js';
+import { statementRouter } from './routes/statement.js';
 import { checkAndSendReminders } from './jobs/sendReminders.js';
 
 const app = express();
@@ -41,6 +42,7 @@ app.use('/api/debts', debtsRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/dashboard', dashboardRouter);
+app.use(statementRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

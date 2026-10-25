@@ -26,6 +26,7 @@ const BillsPage = lazy(() => import('@/pages/BillsPage').then((m) => ({ default:
 const SavingsPage = lazy(() => import('@/pages/SavingsPage').then((m) => ({ default: m.SavingsPage })));
 const LeaksPage = lazy(() => import('@/pages/LeaksPage').then((m) => ({ default: m.LeaksPage })));
 const DebtsPage = lazy(() => import('@/pages/DebtsPage').then((m) => ({ default: m.DebtsPage })));
+const ImportPage = lazy(() => import('@/pages/ImportPage').then((m) => ({ default: m.ImportPage })));
 
 function AppRoutes() {
   const { profile, loading } = useAuth();
@@ -68,6 +69,7 @@ function AppRoutes() {
         <Route path="savings" element={<Suspense fallback={<PageSpinner />}><SavingsPage /></Suspense>} />
         <Route path="leaks" element={<Suspense fallback={<PageSpinner />}><LeaksPage /></Suspense>} />
         {profile?.is_admin && <Route path="admin" element={<Suspense fallback={<PageSpinner />}><AdminPage /></Suspense>} />}
+        <Route path="import" element={<Suspense fallback={<PageSpinner />}><ImportPage /></Suspense>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

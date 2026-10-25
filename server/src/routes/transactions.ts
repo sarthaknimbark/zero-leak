@@ -16,7 +16,7 @@ const createSchema = z.object({
   type: txType,
   amount: z.number().positive(),
   date: z.string().min(1),
-  time: z.string().min(1),
+  time: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   tags: z.array(z.string()).optional().default([]),
   notes: z.string().nullable().optional(),
@@ -29,7 +29,7 @@ const updateSchema = z.object({
   type: txType,
   amount: z.number().positive(),
   date: z.string().min(1),
-  time: z.string().min(1),
+  time: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
   tags: z.array(z.string()).optional().default([]),
   notes: z.string().nullable().optional(),
@@ -94,18 +94,35 @@ transactionsRouter.post(
   asyncHandler(async (req, res) => {
     const body = req.body as z.infer<typeof createSchema>;
     const sb = createUserClient(req.accessToken!);
-    const { data, error } = await sb.rpc('apply_transaction', {
+    let { data, error } = await sb.rpc('apply_transaction', {
       p_account_id: body.account_id,
       p_category_id: body.category_id ?? null,
       p_type: body.type,
       p_amount: body.amount,
       p_date: body.date,
-      p_time: body.time,
+      p_time: body.time || null,
       p_description: body.description ?? null,
       p_tags: body.tags ?? [],
       p_notes: body.notes ?? null,
       p_attachment_url: body.attachment_url ?? null,
     });
+    // If PostgreSQL schema enforces NOT NULL on time, retry with default time format
+    if (error && error.message?.includes('violates not-null constraint') && error.message?.includes('time')) {
+      const retry = await sb.rpc('apply_transaction', {
+        p_account_id: body.account_id,
+        p_category_id: body.category_id ?? null,
+        p_type: body.type,
+        p_amount: body.amount,
+        p_date: body.date,
+        p_time: '00:00:00',
+        p_description: body.description ?? null,
+        p_tags: body.tags ?? [],
+        p_notes: body.notes ?? null,
+        p_attachment_url: body.attachment_url ?? null,
+      });
+      data = retry.data;
+      error = retry.error;
+    }
     if (error) throw new AppError(400, error.message);
     res.status(201).json(data);
   })
