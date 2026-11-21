@@ -45,6 +45,8 @@ export function useCreateTransaction() {
       api('/api/transactions', { method: 'POST', body: JSON.stringify(input) }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['investments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.transfers });
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
       qc.invalidateQueries({ queryKey: ['analytics'] });
@@ -58,6 +60,8 @@ export function useDeleteTransaction() {
     mutationFn: (id: string) => api(`/api/transactions/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['investments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.transfers });
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
       qc.invalidateQueries({ queryKey: ['analytics'] });
@@ -87,6 +91,8 @@ export function useUpdateTransaction() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['investments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.transfers });
       qc.invalidateQueries({ queryKey: queryKeys.accounts });
       qc.invalidateQueries({ queryKey: queryKeys.dashboard });
       qc.invalidateQueries({ queryKey: ['analytics'] });

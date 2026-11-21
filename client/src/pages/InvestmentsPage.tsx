@@ -3,10 +3,12 @@ import { motion } from 'framer-motion';
 import {
   TrendingUp, TrendingDown, ArrowDownLeft, ArrowUpRight,
   Plus, Wallet, ArrowRightLeft, Sparkles, PieChart,
-  Percent, CheckCircle2, AlertCircle, RefreshCw,
+  Percent, CheckCircle2, AlertCircle, RefreshCw, Trash2,
 } from 'lucide-react';
-import { useInvestments } from '@/hooks/useInvestments';
+import { useInvestments, useDeleteInvestment } from '@/hooks/useInvestments';
 import { useAccounts } from '@/hooks/useAccounts';
+import { useToast } from '@/components/ui/Toast';
+import { Modal } from '@/components/ui/Modal';
 import { formatCurrency, formatDate, formatTime } from '@/lib/format';
 import { TransactionFormModal } from '@/components/transactions/TransactionFormModal';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -20,9 +22,12 @@ type HistoryFilter = 'all' | 'deposit' | 'withdrawal' | 'profit' | 'loss';
 export function InvestmentsPage() {
   const { data: invData, isLoading, isError, refetch } = useInvestments();
   const { data: allAccounts } = useAccounts();
+  const deleteInvestment = useDeleteInvestment();
+  const { showToast } = useToast();
   const [modalOpen, setModalOpen] = useState(false);
   const [modalInitialAction, setModalInitialAction] = useState<'invest' | 'withdraw'>('invest');
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
+  const [deleteConfirmItem, setDeleteConfirmItem] = useState<InvestmentHistoryItem | null>(null);
 
   const investmentAccounts = useMemo(() => {
     return (allAccounts ?? []).filter((a) => a.type === 'investment' && a.status === 'active');
@@ -45,6 +50,17 @@ export function InvestmentsPage() {
   const openModal = (action: 'invest' | 'withdraw') => {
     setModalInitialAction(action);
     setModalOpen(true);
+  };
+
+  const handleDeleteInvestment = async () => {
+    if (!deleteConfirmItem) return;
+    try {
+      await deleteInvestment.mutateAsync(deleteConfirmItem.id);
+      showToast('Investment entry deleted and balances restored', 'success');
+      setDeleteConfirmItem(null);
+    } catch (err) {
+      showToast((err as Error).message || 'Failed to delete investment entry', 'error');
+    }
   };
 
   if (isLoading) {
@@ -390,29 +406,40 @@ export function InvestmentsPage() {
                     )}
                   </div>
 
-                  {/* Amount */}
-                  <div className="text-right shrink-0">
-                    <p
-                      className={cn(
-                        'text-sm font-black tabular-nums',
-                        isDeposit && 'text-purple-600 dark:text-purple-400',
-                        isWithdrawal && 'text-indigo-600 dark:text-indigo-400',
-                        isProfit && 'text-emerald-600 dark:text-emerald-400',
-                        isLoss && 'text-rose-600 dark:text-rose-400'
-                      )}
+                  {/* Amount & Actions */}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <p
+                        className={cn(
+                          'text-sm font-black tabular-nums',
+                          isDeposit && 'text-purple-600 dark:text-purple-400',
+                          isWithdrawal && 'text-indigo-600 dark:text-indigo-400',
+                          isProfit && 'text-emerald-600 dark:text-emerald-400',
+                          isLoss && 'text-rose-600 dark:text-rose-400'
+                        )}
+                      >
+                        {isProfit ? '+' : isLoss ? '-' : ''}
+                        {formatCurrency(item.amount)}
+                      </p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                        {isDeposit
+                          ? 'Invested'
+                          : isWithdrawal
+                          ? 'Principal Return'
+                          : isProfit
+                          ? 'Gain Credited'
+                          : 'Realized Loss'}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirmItem(item)}
+                      className="rounded-lg p-1.5 text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 hover:text-rose-600 transition"
+                      title="Delete investment entry"
                     >
-                      {isProfit ? '+' : isLoss ? '-' : ''}
-                      {formatCurrency(item.amount)}
-                    </p>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {isDeposit
-                        ? 'Invested'
-                        : isWithdrawal
-                        ? 'Principal Return'
-                        : isProfit
-                        ? 'Gain Credited'
-                        : 'Realized Loss'}
-                    </p>
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
               );
@@ -420,6 +447,45 @@ export function InvestmentsPage() {
           </div>
         )}
       </div>
+
+      {/* ── Confirmation Modal for Delete ────────────────────────── */}
+      <Modal
+        open={!!deleteConfirmItem}
+        onClose={() => setDeleteConfirmItem(null)}
+        title="Delete Investment Entry"
+        description="Are you sure you want to delete this investment record? Account balances will be automatically restored."
+      >
+        <div className="space-y-4 pt-2">
+          {deleteConfirmItem && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/60 dark:border-rose-900/40 dark:bg-rose-950/20 p-3 text-xs text-rose-900 dark:text-rose-200">
+              <p className="font-bold">{deleteConfirmItem.description}</p>
+              <p className="mt-0.5 opacity-90">
+                Amount: <strong>{formatCurrency(deleteConfirmItem.amount)}</strong> · {deleteConfirmItem.account_name}
+              </p>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmItem(null)}
+              className="btn-secondary text-xs"
+              disabled={deleteInvestment.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteInvestment}
+              className="btn-danger text-xs flex items-center gap-1.5"
+              disabled={deleteInvestment.isPending}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>{deleteInvestment.isPending ? 'Deleting...' : 'Delete Entry'}</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Transaction Modal for Invest / Withdraw ──────────────── */}
       <TransactionFormModal

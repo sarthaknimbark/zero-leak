@@ -29,3 +29,21 @@ export function useInvestments() {
     retry: 1,
   });
 }
+
+export function useDeleteInvestment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api(`/api/investments/${id}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['investments'] });
+      qc.invalidateQueries({ queryKey: queryKeys.accounts });
+      qc.invalidateQueries({ queryKey: queryKeys.dashboard });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: queryKeys.transfers });
+      qc.invalidateQueries({ queryKey: ['analytics'] });
+    },
+  });
+}

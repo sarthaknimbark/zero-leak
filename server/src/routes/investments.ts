@@ -341,3 +341,46 @@ investmentsRouter.post(
     throw new AppError(400, 'Invalid action');
   })
 );
+
+investmentsRouter.delete(
+  '/:id',
+  asyncHandler(async (req, res) => {
+    const rawId = req.params.id;
+    const sb = createUserClient(req.accessToken!);
+
+    // Handle transfer entries (deposits and principal returns)
+    if (rawId.startsWith('tf-') || rawId.startsWith('transfer-')) {
+      const transferId = rawId.replace(/^(tf-|transfer-)/, '');
+      const { error } = await sb.rpc('delete_transfer', {
+        p_transfer_id: transferId,
+      });
+      if (error) throw new AppError(400, error.message);
+      return res.status(204).send();
+    }
+
+    // Handle transaction entries (profits and losses)
+    if (rawId.startsWith('tx-')) {
+      const txId = rawId.replace(/^tx-/, '');
+      const { error } = await sb.rpc('delete_transaction', {
+        p_transaction_id: txId,
+      });
+      if (error) throw new AppError(400, error.message);
+      return res.status(204).send();
+    }
+
+    // Direct UUID: try delete_transaction first, fallback to delete_transfer
+    const { error: txErr } = await sb.rpc('delete_transaction', {
+      p_transaction_id: rawId,
+    });
+    if (!txErr) {
+      return res.status(204).send();
+    }
+
+    const { error: tfErr } = await sb.rpc('delete_transfer', {
+      p_transfer_id: rawId,
+    });
+    if (tfErr) throw new AppError(400, tfErr.message || txErr.message);
+
+    res.status(204).send();
+  })
+);

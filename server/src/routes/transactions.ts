@@ -223,11 +223,38 @@ transactionsRouter.patch(
 transactionsRouter.delete(
   '/:id',
   asyncHandler(async (req, res) => {
+    const rawId = req.params.id;
     const sb = createUserClient(req.accessToken!);
+
+    // Handle merged investment transfer entries
+    if (rawId.startsWith('transfer-') || rawId.startsWith('tf-')) {
+      const transferId = rawId.replace(/^(transfer-|tf-)/, '');
+      const { error } = await sb.rpc('delete_transfer', {
+        p_transfer_id: transferId,
+      });
+      if (error) throw new AppError(400, error.message);
+      return res.status(204).send();
+    }
+
+    if (rawId.startsWith('tx-')) {
+      const txId = rawId.replace(/^tx-/, '');
+      const { error } = await sb.rpc('delete_transaction', {
+        p_transaction_id: txId,
+      });
+      if (error) throw new AppError(400, error.message);
+      return res.status(204).send();
+    }
+
     const { error } = await sb.rpc('delete_transaction', {
-      p_transaction_id: req.params.id,
+      p_transaction_id: rawId,
     });
-    if (error) throw new AppError(400, error.message);
+    if (error) {
+      // Fallback: in case it's a transfer UUID
+      const { error: tfErr } = await sb.rpc('delete_transfer', {
+        p_transfer_id: rawId,
+      });
+      if (tfErr) throw new AppError(400, error.message);
+    }
     res.status(204).send();
   })
 );

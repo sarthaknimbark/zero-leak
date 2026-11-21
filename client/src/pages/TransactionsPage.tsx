@@ -135,7 +135,8 @@ export function TransactionsPage() {
     const txToDelete = transactions?.find((t) => t.id === deleteId);
     try {
       await deleteTx.mutateAsync(deleteId);
-      showToast('Deleted', 'success', txToDelete ? {
+      const isTransferOrInvestment = deleteId.startsWith('transfer-') || deleteId.startsWith('tf-') || txToDelete?.type === 'investment';
+      showToast('Deleted and balance updated', 'success', (!isTransferOrInvestment && txToDelete) ? {
         label: 'Undo',
         onClick: async () => {
           try {
