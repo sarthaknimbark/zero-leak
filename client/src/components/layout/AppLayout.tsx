@@ -6,6 +6,7 @@ import {
   Tags, Download, Settings, LogOut, Plus, Menu, X,
   PiggyBank, ArrowDownCircle, ArrowRightLeft, Gift,
   Shield, ChevronLeft, Sun, Moon, CalendarDays, ShieldAlert, Users, Grid2X2, FileUp,
+  Receipt, LineChart,
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -22,9 +23,10 @@ interface NavItem {
 const mainNav: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/accounts', label: 'Accounts', icon: Wallet },
-  { to: '/transactions', label: 'Transactions', icon: TrendingUp },
+  { to: '/transactions', label: 'Transactions', icon: Receipt },
+  { to: '/investments', label: 'Investments', icon: TrendingUp },
   { to: '/transfers', label: 'Transfers', icon: ArrowLeftRight },
-  { to: '/analytics', label: 'Analytics', icon: TrendingUp },
+  { to: '/analytics', label: 'Analytics', icon: LineChart },
   { to: '/savings', label: 'Wishlist', icon: Gift },
 ];
 
@@ -41,6 +43,7 @@ const moreNav: NavItem[] = [
 
 const fabActions = [
   { label: 'New Transaction', icon: ArrowDownCircle, path: '/transactions?action=new' },
+  { label: 'Invest / Withdraw', icon: TrendingUp, path: '/transactions?action=new&type=investment' },
   { label: 'New Transfer', icon: ArrowRightLeft, path: '/transfers?action=new' },
   { label: 'Add Account', icon: PiggyBank, path: '/accounts?action=new' },
 ];

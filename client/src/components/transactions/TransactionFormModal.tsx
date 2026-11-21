@@ -57,6 +57,7 @@ export function TransactionFormModal({
   const [investAmount, setInvestAmount] = useState('');
   const [withdrawInvestedAmount, setWithdrawInvestedAmount] = useState('');
   const [withdrawReceivedAmount, setWithdrawReceivedAmount] = useState('');
+  const [isFullSettlement, setIsFullSettlement] = useState(false);
   const [investDate, setInvestDate] = useState(new Date().toISOString().split('T')[0]);
   const [investTime, setInvestTime] = useState(new Date().toTimeString().slice(0, 5));
   const [investDesc, setInvestDesc] = useState('');
@@ -118,6 +119,7 @@ export function TransactionFormModal({
       setWithdrawReceivedAmount('');
       setInvestDesc('');
       setInvestNotes('');
+      setIsFullSettlement(false);
       setShowCreateInvAcc(false);
       setNewInvAccName('');
       setNewInvAccInst('');
@@ -282,6 +284,7 @@ export function TransactionFormModal({
           to_account_id: investFromAccount,
           invested_amount: investedAmt,
           withdrawn_amount: receivedAmt,
+          is_full_settlement: isFullSettlement,
           date: investDate,
           time: investTime,
           description: investDesc || 'Investment Withdrawal',
@@ -606,13 +609,14 @@ export function TransactionFormModal({
                         {[25, 50, 75, 100].map((pct) => {
                           const total = Number(selectedInvestmentAccount.current_balance);
                           const computed = Math.round((total * (pct / 100)) * 100) / 100;
-                          const isSelected = Math.abs(numInvested - computed) < 0.05;
+                          const isSelected = Math.abs(numInvested - computed) < 0.05 && (pct !== 100 || isFullSettlement);
                           return (
                             <button
                               key={pct}
                               type="button"
                               onClick={() => {
                                 setWithdrawInvestedAmount(computed.toString());
+                                setIsFullSettlement(pct === 100);
                               }}
                               className={cn(
                                 'rounded-lg py-1.5 px-2 text-xs font-bold border transition text-center',
@@ -628,6 +632,49 @@ export function TransactionFormModal({
                       </div>
                     </div>
                   )}
+
+                  {/* 100% Full Settlement Switch Card */}
+                  <div
+                    onClick={() => {
+                      const nextVal = !isFullSettlement;
+                      setIsFullSettlement(nextVal);
+                      if (nextVal && selectedInvestmentAccount) {
+                        setWithdrawInvestedAmount(Number(selectedInvestmentAccount.current_balance).toString());
+                      }
+                    }}
+                    className={cn(
+                      'flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition select-none',
+                      isFullSettlement
+                        ? 'border-purple-500 bg-purple-50/80 dark:border-purple-600 dark:bg-purple-950/30 ring-1 ring-purple-500/30'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/30 hover:border-slate-300'
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isFullSettlement}
+                      onChange={(e) => {
+                        setIsFullSettlement(e.target.checked);
+                        if (e.target.checked && selectedInvestmentAccount) {
+                          setWithdrawInvestedAmount(Number(selectedInvestmentAccount.current_balance).toString());
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-purple-600 focus:ring-purple-500"
+                    />
+                    <div className="flex-1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800 dark:text-slate-100">100% Full Settlement</span>
+                        {isFullSettlement && (
+                          <span className="rounded-full bg-purple-100 dark:bg-purple-900/60 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:text-purple-300">
+                            Full Portfolio Exit
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        Toggle ON if you are fully closing this position. If withdrawn amount is less than invested, the balance liquidates down to ₹0.00 as a realized loss. If OFF, dynamic partial balance is retained.
+                      </p>
+                    </div>
+                  </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -747,7 +794,7 @@ export function TransactionFormModal({
                   {numInvested > 0 && numReceived > 0 && (
                     <div
                       className={cn(
-                        'rounded-xl border p-3.5 text-xs space-y-1.5 transition',
+                        'rounded-xl border p-3.5 text-xs space-y-2 transition',
                         returnDiff > 0
                           ? 'border-emerald-200 bg-emerald-50/70 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200'
                           : returnDiff < 0
@@ -765,7 +812,9 @@ export function TransactionFormModal({
                           ) : returnDiff < 0 ? (
                             <>
                               <TrendingDown className="h-4 w-4 text-rose-600 dark:text-rose-400" />
-                              <span className="text-rose-700 dark:text-rose-300">Investment Loss</span>
+                              <span className="text-rose-700 dark:text-rose-300">
+                                {isFullSettlement ? '100% Full Settlement Loss' : 'Partial Realized Loss'}
+                              </span>
                             </>
                           ) : (
                             <span>Break-even Return</span>
@@ -780,16 +829,36 @@ export function TransactionFormModal({
                         <strong>Performance Summary:</strong> Liquidating <strong>{formatCurrency(numInvested)}</strong> of your investment, which realized <strong>{formatCurrency(numReceived)}</strong> ({returnDiff >= 0 ? 'profit' : 'loss'} of <strong>{returnDiff >= 0 ? '+' : ''}{formatCurrency(returnDiff)}</strong>).
                       </p>
 
-                      <div className="text-[11px] space-y-0.5 border-t border-current/15 pt-1.5 opacity-85">
-                        <p>• {formatCurrency(numInvested)} partial principal deducted from {selectedInvestmentAccount?.name || 'Investment'}</p>
-                        {selectedInvestmentAccount && (
-                          <p>
-                            • {formatCurrency(Math.max(0, Number(selectedInvestmentAccount.current_balance) - numInvested))} dynamically remains in {selectedInvestmentAccount.name}
+                      <div className="rounded-lg bg-black/5 dark:bg-white/5 p-2.5 text-[11px] space-y-1">
+                        <div className="font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Individual Bank & Ledger Entries:</div>
+                        <p className="flex justify-between">
+                          <span>• Principal Returned to {selectedSourceAccount?.name || 'Bank'}:</span>
+                          <span className="font-semibold tabular-nums">{formatCurrency(returnDiff >= 0 ? numInvested : Math.min(numReceived, numInvested))}</span>
+                        </p>
+                        {returnDiff > 0 && (
+                          <p className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                            <span>• Profit Income to {selectedSourceAccount?.name || 'Bank'}:</span>
+                            <span className="font-bold tabular-nums">+{formatCurrency(returnDiff)}</span>
                           </p>
                         )}
-                        <p>• {formatCurrency(numReceived)} will be deposited into {selectedSourceAccount?.name || 'Destination Account'}</p>
-                        {returnDiff > 0 && <p>• +{formatCurrency(returnDiff)} recognized as Investment Gain</p>}
-                        {returnDiff < 0 && <p>• -{formatCurrency(Math.abs(returnDiff))} recognized as Investment Loss</p>}
+                        {returnDiff < 0 && (
+                          <p className="flex justify-between text-rose-600 dark:text-rose-400">
+                            <span>• Realized Loss Recognized:</span>
+                            <span className="font-bold tabular-nums">-{formatCurrency(Math.abs(returnDiff))}</span>
+                          </p>
+                        )}
+                        <p className="flex justify-between border-t border-current/10 pt-1 font-bold">
+                          <span>• Total Credited to {selectedSourceAccount?.name || 'Bank'}:</span>
+                          <span className="tabular-nums">{formatCurrency(numReceived)}</span>
+                        </p>
+                        <p className="flex justify-between text-slate-500 pt-0.5">
+                          <span>• Remaining Portfolio Balance:</span>
+                          <span className="font-semibold tabular-nums">
+                            {isFullSettlement
+                              ? '₹0.00 (100% Settled)'
+                              : formatCurrency(Math.max(0, Number(selectedInvestmentAccount?.current_balance || 0) - numInvested))}
+                          </span>
+                        </p>
                       </div>
                     </div>
                   )}

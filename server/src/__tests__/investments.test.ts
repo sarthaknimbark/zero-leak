@@ -74,6 +74,63 @@ describe('Investment Partial Withdrawal & Dynamic Balance Logic', () => {
     });
   });
 
+  describe('100% Full Settlement with Realized Loss', () => {
+    it('liquidates entire remaining balance down to 0 and recognizes remaining loss on 100% full settlement', () => {
+      // User invested ₹50,000. Market crashed or liquidation value is ₹35,000 (-₹15,000 loss).
+      // With 100% full settlement, entire ₹50,000 account balance should be zeroed out.
+      const result = calculateWithdrawal({
+        currentInvestmentBalance: 50000,
+        investedPrincipalToWithdraw: 50000,
+        withdrawnAmount: 35000,
+        isFullSettlement: true,
+      });
+
+      expect(result.isFullSettlement).toBe(true);
+      expect(result.investedPrincipal).toBe(50000);
+      expect(result.withdrawnAmount).toBe(35000);
+      expect(result.profitLoss).toBe(-15000);
+      expect(result.returnPercentage).toBe(-30);
+
+      // Entire investment account is liquidated down to ₹0.00
+      expect(result.remainingInvestmentBalance).toBe(0);
+
+      // ₹35,000 transferred to destination bank account
+      expect(result.transferAmountFromInvestment).toBe(35000);
+      // Remaining ₹15,000 deducted from investment account as realized loss
+      expect(result.lossToDeductFromInvestment).toBe(15000);
+      // Total reduction from investment account: 35,000 + 15,000 = 50,000
+      expect(result.transferAmountFromInvestment + result.lossToDeductFromInvestment).toBe(50000);
+    });
+
+    it('handles partial withdrawal at loss when isFullSettlement is false vs true', () => {
+      // Scenario: User has ₹100,000 total balance.
+      // Sells a slice of ₹40,000 principal for ₹30,000 (-₹10,000 loss).
+      // Case A: Partial withdrawal (isFullSettlement = false)
+      const partialResult = calculateWithdrawal({
+        currentInvestmentBalance: 100000,
+        investedPrincipalToWithdraw: 40000,
+        withdrawnAmount: 30000,
+        isFullSettlement: false,
+      });
+
+      expect(partialResult.remainingInvestmentBalance).toBe(60000); // 100,000 - 40,000 = 60,000
+      expect(partialResult.transferAmountFromInvestment).toBe(30000);
+      expect(partialResult.lossToDeductFromInvestment).toBe(10000);
+
+      // Case B: 100% full settlement (isFullSettlement = true)
+      const fullResult = calculateWithdrawal({
+        currentInvestmentBalance: 100000,
+        investedPrincipalToWithdraw: 100000,
+        withdrawnAmount: 70000,
+        isFullSettlement: true,
+      });
+
+      expect(fullResult.remainingInvestmentBalance).toBe(0);
+      expect(fullResult.transferAmountFromInvestment).toBe(70000);
+      expect(fullResult.lossToDeductFromInvestment).toBe(30000);
+    });
+  });
+
   describe('Full 100% Liquidation', () => {
     it('reduces investment balance to 0 and credits full withdrawal to destination', () => {
       const result = calculateWithdrawal({

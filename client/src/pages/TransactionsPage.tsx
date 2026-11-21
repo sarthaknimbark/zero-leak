@@ -244,6 +244,7 @@ export function TransactionsPage() {
                 <option value="">All</option>
                 <option value="income">Income</option>
                 <option value="expense">Expense</option>
+                <option value="investment">Investment</option>
                 <option value="adjustment">Adjustment</option>
               </select>
             </div>
@@ -388,9 +389,21 @@ export function TransactionsPage() {
                           'text-sm font-bold tabular-nums whitespace-nowrap',
                           tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400'
                           : tx.type === 'expense' ? 'text-rose-600 dark:text-rose-400'
+                          : tx.type === 'investment' ? 'text-purple-600 dark:text-purple-400'
                           : 'text-indigo-600 dark:text-indigo-400',
                         )}>
-                          {tx.type === 'income' ? '+' : tx.type === 'expense' ? '-' : '±'}{formatCurrency(Number(tx.amount))}
+                          {tx.type === 'income'
+                            ? '+'
+                            : tx.type === 'expense'
+                            ? '-'
+                            : tx.type === 'investment'
+                            ? tx.tags?.includes('deposit')
+                              ? '-'
+                              : tx.tags?.includes('principal-return')
+                              ? '+'
+                              : '⚡ '
+                            : '±'}
+                          {formatCurrency(Number(tx.amount))}
                         </span>
 
                         {/* Edit/Delete — visible on hover (desktop) or always small on mobile */}

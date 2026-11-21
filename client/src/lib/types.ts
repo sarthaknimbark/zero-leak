@@ -1,6 +1,6 @@
 export type AccountType = 'cash' | 'bank' | 'wallet' | 'investment';
 export type AccountStatus = 'active' | 'archived';
-export type TransactionType = 'income' | 'expense' | 'adjustment';
+export type TransactionType = 'income' | 'expense' | 'adjustment' | 'investment';
 export type CategoryType = 'income' | 'expense';
 export type InvestmentAction = 'invest' | 'withdraw';
 
@@ -13,11 +13,38 @@ export interface InvestmentInput {
   to_account_id?: string;
   invested_amount?: number;
   withdrawn_amount?: number;
+  is_full_settlement?: boolean;
   date: string;
   time: string;
   description?: string;
   tags?: string[];
   notes?: string;
+}
+
+export interface InvestmentHistoryItem {
+  id: string;
+  type: 'deposit' | 'withdrawal' | 'profit' | 'loss';
+  date: string;
+  time: string;
+  amount: number;
+  description: string;
+  account_name: string;
+  related_account_name?: string;
+  roi?: number;
+  is_full_settlement?: boolean;
+  notes?: string;
+}
+
+export interface InvestmentSummaryData {
+  accounts: Account[];
+  totalPortfolioValue: number;
+  totalInvested: number;
+  totalWithdrawn: number;
+  totalProfit: number;
+  totalLoss: number;
+  netProfitLoss: number;
+  totalROI: number;
+  history: InvestmentHistoryItem[];
 }
 
 export interface Profile {

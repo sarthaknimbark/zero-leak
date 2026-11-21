@@ -6,6 +6,38 @@ import { validateBody } from '../middleware/validate.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { AppError } from '../utils/errors.js';
 
+export function mapInvestmentTransferToTransaction(t: any) {
+  const isDeposit = t.to_account?.type === 'investment';
+  return {
+    id: `transfer-${t.id}`,
+    user_id: t.user_id,
+    account_id: isDeposit ? t.from_account_id : t.to_account_id,
+    category_id: null,
+    type: 'investment' as const,
+    amount: Number(t.amount),
+    date: t.date,
+    time: t.time || '00:00:00',
+    description:
+      t.description ||
+      (isDeposit
+        ? `Investment Deposit: ${t.to_account?.name || 'Investment'}`
+        : `Principal Returned: ${t.from_account?.name || 'Investment'}`),
+    tags: ['investment', isDeposit ? 'deposit' : 'principal-return'],
+    notes: t.notes || (isDeposit ? `Invested into ${t.to_account?.name}` : `Returned from ${t.from_account?.name}`),
+    created_at: t.created_at,
+    account: isDeposit ? t.from_account : t.to_account,
+    category: { id: 'inv', name: 'Investments', color: '#8b5cf6', icon: 'trending-up' },
+  };
+}
+
+export function sortTransactionsChronological(items: any[]) {
+  return [...items].sort((a: any, b: any) => {
+    const c = b.date.localeCompare(a.date);
+    if (c !== 0) return c;
+    return (b.time || '').localeCompare(a.time || '');
+  });
+}
+
 export const transactionsRouter = Router();
 
 const txType = z.enum(['income', 'expense', 'adjustment']);
@@ -61,7 +93,11 @@ transactionsRouter.get(
       .order('date', { ascending: false })
       .order('created_at', { ascending: false });
 
-    if (typeof type === 'string' && type) q = q.eq('type', type);
+    if (type === 'investment') {
+      q = q.or('tags.cs.{investment},description.ilike.%Investment%,notes.ilike.%Investment%');
+    } else if (typeof type === 'string' && type) {
+      q = q.eq('type', type);
+    }
     if (typeof account_id === 'string' && account_id) q = q.eq('account_id', account_id);
     if (typeof category_id === 'string' && category_id) q = q.eq('category_id', category_id);
     if (typeof date_from === 'string' && date_from) q = q.gte('date', date_from);
@@ -84,7 +120,40 @@ transactionsRouter.get(
 
     const { data, error } = await q.limit(500);
     if (error) throw new AppError(400, error.message);
-    res.json(data ?? []);
+
+    let results = data ?? [];
+
+    if (type === 'investment' || !type) {
+      let tfQ = sb
+        .from('transfers')
+        .select(
+          '*, from_account:accounts!from_account_id(id,name,type,color,icon), to_account:accounts!to_account_id(id,name,type,color,icon)'
+        )
+        .order('date', { ascending: false })
+        .limit(100);
+
+      if (typeof account_id === 'string' && account_id) {
+        tfQ = tfQ.or(`from_account_id.eq.${account_id},to_account_id.eq.${account_id}`);
+      }
+      if (typeof date_from === 'string' && date_from) tfQ = tfQ.gte('date', date_from);
+      if (typeof date_to === 'string' && date_to) tfQ = tfQ.lte('date', date_to);
+
+      const { data: tfData } = await tfQ;
+      if (tfData) {
+        const invTransfers = tfData
+          .filter(
+            (t: any) =>
+              t.from_account?.type === 'investment' ||
+              t.to_account?.type === 'investment' ||
+              (t.description || '').toLowerCase().includes('investment')
+          )
+          .map(mapInvestmentTransferToTransaction);
+
+        results = sortTransactionsChronological([...results, ...invTransfers]);
+      }
+    }
+
+    res.json(results);
   })
 );
 

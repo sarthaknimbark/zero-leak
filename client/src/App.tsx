@@ -27,6 +27,7 @@ const SavingsPage = lazy(() => import('@/pages/SavingsPage').then((m) => ({ defa
 const LeaksPage = lazy(() => import('@/pages/LeaksPage').then((m) => ({ default: m.LeaksPage })));
 const DebtsPage = lazy(() => import('@/pages/DebtsPage').then((m) => ({ default: m.DebtsPage })));
 const ImportPage = lazy(() => import('@/pages/ImportPage').then((m) => ({ default: m.ImportPage })));
+const InvestmentsPage = lazy(() => import('@/pages/InvestmentsPage').then((m) => ({ default: m.InvestmentsPage })));
 
 function AppRoutes() {
   const { profile, loading } = useAuth();
@@ -58,6 +59,7 @@ function AppRoutes() {
         <Route index element={<Suspense fallback={<PageSpinner />}><DashboardPage /></Suspense>} />
         <Route path="accounts" element={<Suspense fallback={<PageSpinner />}><AccountsPage /></Suspense>} />
         <Route path="transactions" element={<Suspense fallback={<PageSpinner />}><TransactionsPage /></Suspense>} />
+        <Route path="investments" element={<Suspense fallback={<PageSpinner />}><InvestmentsPage /></Suspense>} />
         <Route path="transfers" element={<Suspense fallback={<PageSpinner />}><TransfersPage /></Suspense>} />
         <Route path="analytics" element={<Suspense fallback={<PageSpinner />}><AnalyticsPage /></Suspense>} />
         <Route path="categories" element={<Suspense fallback={<PageSpinner />}><CategoriesPage /></Suspense>} />
