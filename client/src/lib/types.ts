@@ -2,6 +2,23 @@ export type AccountType = 'cash' | 'bank' | 'wallet' | 'investment';
 export type AccountStatus = 'active' | 'archived';
 export type TransactionType = 'income' | 'expense' | 'adjustment';
 export type CategoryType = 'income' | 'expense';
+export type InvestmentAction = 'invest' | 'withdraw';
+
+export interface InvestmentInput {
+  action: InvestmentAction;
+  from_account_id?: string;
+  to_investment_account_id?: string;
+  amount?: number;
+  from_investment_account_id?: string;
+  to_account_id?: string;
+  invested_amount?: number;
+  withdrawn_amount?: number;
+  date: string;
+  time: string;
+  description?: string;
+  tags?: string[];
+  notes?: string;
+}
 
 export interface Profile {
   id: string;

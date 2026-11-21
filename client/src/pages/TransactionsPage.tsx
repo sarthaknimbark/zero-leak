@@ -93,6 +93,7 @@ function SummaryCard({
 export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [modalOpen, setModalOpen] = useState(false);
+  const [initialType, setInitialType] = useState<'income' | 'expense' | 'adjustment' | 'investment'>('expense');
   const [editTransaction, setEditTransaction] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState<TransactionFilters>({});
   const [showFilters, setShowFilters] = useState(false);
@@ -104,6 +105,12 @@ export function TransactionsPage() {
 
   useEffect(() => {
     if (searchParams.get('action') === 'new') {
+      const typeParam = searchParams.get('type');
+      if (typeParam === 'investment' || typeParam === 'income' || typeParam === 'expense' || typeParam === 'adjustment') {
+        setInitialType(typeParam);
+      } else {
+        setInitialType('expense');
+      }
       setEditTransaction(null);
       setModalOpen(true);
       setSearchParams({});
@@ -416,6 +423,7 @@ export function TransactionsPage() {
       <TransactionFormModal
         open={modalOpen || !!editTransaction}
         transaction={editTransaction}
+        initialType={initialType}
         onClose={() => {
           setModalOpen(false);
           setEditTransaction(null);

@@ -175,9 +175,10 @@ export function DashboardPage() {
           <DailyExpenseChips />
 
           {/* Quick actions */}
-          <div className="grid grid-cols-3 gap-3">
-            <QuickActionCard to="/transactions?action=new" label="Add Income" sublabel="Money received" icon={<ArrowDownCircle className="h-6 w-6" />} color="emerald" />
-            <QuickActionCard to="/transactions?action=new" label="Add Expense" sublabel="Money spent" icon={<ArrowUpCircle className="h-6 w-6" />} color="rose" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <QuickActionCard to="/transactions?action=new&type=income" label="Add Income" sublabel="Money received" icon={<ArrowDownCircle className="h-6 w-6" />} color="emerald" />
+            <QuickActionCard to="/transactions?action=new&type=expense" label="Add Expense" sublabel="Money spent" icon={<ArrowUpCircle className="h-6 w-6" />} color="rose" />
+            <QuickActionCard to="/transactions?action=new&type=investment" label="Invest" sublabel="Grow wealth" icon={<TrendingUp className="h-6 w-6" />} color="purple" />
             <QuickActionCard to="/transfers?action=new" label="Transfer" sublabel="Move money" icon={<ArrowLeftRight className="h-6 w-6" />} color="indigo" />
           </div>
 
@@ -420,9 +421,10 @@ const quickActionColors = {
   emerald: 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-400 dark:hover:bg-emerald-950/30',
   rose: 'bg-rose-50 text-rose-600 hover:bg-rose-100 dark:bg-rose-950/20 dark:text-rose-400 dark:hover:bg-rose-950/30',
   indigo: 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 dark:bg-indigo-950/20 dark:text-indigo-400 dark:hover:bg-indigo-950/30',
+  purple: 'bg-purple-50 text-purple-600 hover:bg-purple-100 dark:bg-purple-950/20 dark:text-purple-400 dark:hover:bg-purple-950/30',
 };
 
-function QuickActionCard({ to, label, sublabel, icon, color }: { to: string; label: string; sublabel: string; icon: React.ReactNode; color: 'emerald' | 'rose' | 'indigo' }) {
+function QuickActionCard({ to, label, sublabel, icon, color }: { to: string; label: string; sublabel: string; icon: React.ReactNode; color: 'emerald' | 'rose' | 'indigo' | 'purple' }) {
   return (
     <Link
       to={to}
